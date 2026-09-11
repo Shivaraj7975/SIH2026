@@ -2,6 +2,8 @@
 
 GeoFit turns real-world running, walking, and cycling into a live multiplayer territory conquest game. Athletes claim hexagonal geographic sectors (H3 resolution 10) as they move through cities, defend their home turf against rival runners, and climb daily and weekly leaderboards.
 
+> 📖 **Looking for an in-depth breakdown of how the entire system, gameplay mechanics, and architecture work? Check out the [Comprehensive Project Overview](PROJECT_OVERVIEW.md).**
+
 ---
 
 ## ⚡ Key Highlights & Architecture
