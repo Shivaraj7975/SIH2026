@@ -1,6 +1,6 @@
 # GeoFit — Real-World Territory Conquest & Fitness Gamification
 
-GeoFit turns real-world running, walking, and cycling into a live multiplayer territory conquest game. Athletes claim hexagonal geographic sectors (H3 resolution 10) as they move through cities, defend their home turf against rival runners, and climb daily and weekly leaderboards.
+GeoFit turns real-world running, walking, and outdoor cardio into a live multiplayer territory conquest game. Athletes claim hexagonal geographic micro-sectors (H3 resolution 14, ~10 m² per cell) as they move through campuses and cities, defend their home turf against rival runners, and climb daily and weekly leaderboards.
 
 > 📖 **Looking for an in-depth breakdown of how the entire system, gameplay mechanics, and architecture work? Check out the [Comprehensive Project Overview](PROJECT_OVERVIEW.md).**
 
@@ -8,16 +8,18 @@ GeoFit turns real-world running, walking, and cycling into a live multiplayer te
 
 ## ⚡ Key Highlights & Architecture
 
-- **Territory Engine**: Uber H3 hierarchical spatial index (`res 10` ~ 43.58 m² per cell) for seamless real-time polygon aggregation and conquest mapping.
+- **Territory Engine**: Uber H3 hierarchical spatial index (**Resolution 14 ~ 10 m² per cell**, diameter ~2.7m) matching college paths, sidewalks, and running tracks for ultra-precise conquest mapping.
 - **Monotonic Territory Mechanics**:
-  - **Total Area Captured**: Monotonically cumulative count of all verified conquered ground (never decreases).
+  - **Total Area Captured**: Monotonically cumulative count of all verified conquered ground (never decreases, celebrating lifetime effort).
   - **Current Holding Area**: Live map grid ownership that dynamically reflects active territory and rival takeovers.
 - **Competitions & Leaderboards**:
   - Strictly **Daily** and **Weekly** standings.
   - Three specialized sectors: **Distance Covered**, **Current Holding Area**, and **Total Area Captured**.
 - **Real-Time Multiplayer**: WebSocket live event stream pushing notifications when rivals conquer adjacent territory.
 - **Anti-Cheat & Noise Filtering**: Speed cap validation, unrealistic acceleration checks, and GPS jitter rejection.
-- **Privacy & Safety**: Safe zones (home, workplace masking) and full GDPR compliance.
+- **Privacy & Safety by Design**: 
+  - **Doorstep Conquest Enabled**: Conquers hexagons everywhere you move (including outside your door).
+  - **Strict Path & Endpoint Privacy**: Other athletes can **never** see your starting point, ending point, or exact running/walking route. Rivals only see public colored hexagon tiles on the map.
 - **Modern UI**: Clean White & Slate aesthetic, deep slate typography, and purple/dark-blue technical accents with micro-interactions.
 
 ---

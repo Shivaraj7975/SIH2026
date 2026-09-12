@@ -67,14 +67,14 @@ This document details the security controls, privacy safeguards, threat mitigati
 │  - Raw GPS Points (Owner-only access)│  │  - ONLY H3 Hex IDs (e.g. 886189...) │
 │  - Private Fitness Totals            │  │  - Athlete Display Name & Avatar    │
 │  - Redacted from Non-Owner Viewers   │  │  - ZERO exact live GPS coordinates  │
-│  - Safe Zones Masked from Territory  │  │  - ZERO raw private polylines       │
+│  - Start/End Points Strictly Redacted│  │  - ZERO raw private polylines       │
 └──────────────────────────────────────┘  └─────────────────────────────────────┘
 ```
 
 ### Privacy Safeguards:
 1. **Zero Live GPS Broadcast**: Real-time Socket.IO broadcasts transmit *only* discrete H3 cell indices (`h3CellId`), athlete display names, and avatars. Raw GPS points are never emitted over public sockets.
-2. **Exact Route Redaction**: When non-owners view activity logs, `routeGeometry` and GPS coordinates are redacted (`null`), preventing route stalking.
-3. **Privacy Safe Zones (Home & Workplace)**: Athletes can define custom exclusion circles (e.g., 300m–1000m radius). Any movement inside these safe zones will *never* claim public territory hexes, preventing opponents from deducing the runner's home or office address.
+2. **Exact Route, Start Point & End Point Redaction**: When non-owners view activity logs, `routeGeometry`, `startPoint`, and `endPoint` are always redacted (`null`), strictly preventing personal movement profiling and route stalking.
+3. **Doorstep Conquest with Endpoint Privacy**: Athletes conquer hexagons everywhere they run (including doorstep/home). Because start/end points and route geometry are concealed, other runners only see conquered hexagon tiles, completely eliminating boundary hole inference.
 4. **Anonymous Leaderboard Mode**: Athletes can toggle anonymous mode to hide their handle on public rankings.
 5. **GDPR / CCPA Data Sovereignty**: Athletes can delete individual workouts or trigger a complete account telemetry purge at any time.
 
@@ -84,7 +84,7 @@ This document details the security controls, privacy safeguards, threat mitigati
 
 | Threat / Risk | Likelihood | Impact | Current Mitigation | Recommended Production Hardening |
 | :--- | :--- | :--- | :--- | :--- |
-| **Boundary Inference Attacks** (Opponent analyzes perimeter of unclaimed cells to deduce a privacy zone center) | Medium | Medium | Movement in privacy zones generates 0 territory claims. | Encourage users to set larger privacy zone radii (500m–1000m) and add random jitter to zone boundaries. |
+| **Boundary Inference Attacks** (Opponent analyzes perimeter to deduce an athlete's home) | Low | Low | Start and end points are strictly redacted for non-owners, and territory conquest is uniform everywhere (eliminating dead-zone holes that leak home locations). | Keep startPoint, endPoint, and routeGeometry permanently redacted for all non-owner queries. |
 | **OS-Level Developer Mock Location Tools** (Simulating human speeds via GPS spoofing apps) | Medium | Low | Velocity, acceleration, and anomaly validation reject high-speed motorized travel. | Future integration with mobile SDK hardware sensors (step cadence, barometer altitude, BLE heart rate). |
 | **Physical Stalking via Public Map Timing** | Low | High | Workouts are only uploaded upon completion (batch submission), not as a live beacon. | Keep live GPS tracking strictly local to client memory during run. |
 | **Database Compromise (Direct DB Access)** | Low | High | Application access uses parameterized queries. | Enable TLS/SSL connection strings and AES-256 transparent data encryption (TDE) for production PostgreSQL disks. |
@@ -96,7 +96,7 @@ This document details the security controls, privacy safeguards, threat mitigati
 - [x] All mutating activity endpoints validate user authentication and ownership.
 - [x] Cross-user activity submission is strictly prevented.
 - [x] Territory capture mutations are restricted to server-authoritative GPS processing.
-- [x] Privacy Zones effectively mask sensitive home and workplace locations.
-- [x] Raw GPS points and detailed routes are withheld from public viewers.
+- [x] Doorstep territory conquest is enabled everywhere while personal start/end points and routes are strictly hidden from other users.
+- [x] Raw GPS points, start points, end points, and detailed routes are withheld from public viewers.
 - [x] GDPR data deletion and full account purging are fully supported.
 - [x] Transparent in-app location disclosure policy is accessible to all users.

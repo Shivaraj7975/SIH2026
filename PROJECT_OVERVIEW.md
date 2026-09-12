@@ -18,14 +18,14 @@ As athletes move through the physical world, their real-time GPS trajectories cl
 ## 2. Core Gameplay Mechanics: How Territory Conquest Works
 
 ### 🔷 The Hexagonal Spatial Grid (Uber H3 Indexing)
-- The entire globe is partitioned using **Uber’s H3 Discrete Global Grid System** at **Resolution 10**.
-- Each hexagonal cell spans approximately **~43.58 m²** (roughly the footprint of a suburban house lot or a road intersection).
+- The entire globe is partitioned using **Uber’s H3 Discrete Global Grid System** at **Resolution 14**.
+- Each hexagonal cell spans approximately **~10 m²** (diameter ~2.7m), matching college pathways, jogging tracks, sidewalks, and road lanes.
 - Hexagons eliminate edge-distortion and provide uniform neighboring connectivity (every hexagon has exactly 6 equidistant neighbors), ensuring fair and smooth geographic calculations anywhere on Earth.
 
 ### 🏃 Running Loops & Area Enclosure (Paper.io Engine)
 GeoFit supports two primary modes of territorial expansion:
 1. **Corridor Trajectory Capture**: 
-   - Moving along a linear route claims a buffered geographic corridor of hex cells along the path.
+   - Moving along a linear route claims a continuous corridor of ~10 m² micro-hex cells along the path.
 2. **Loop & Polygon Enclosure (The Paper.io Mechanic)**:
    - When an athlete starts a run, leaves their claimed perimeter, runs a loop through contested or neutral ground, and re-connects back to their starting track or existing territory, **all interior hexagonal cells enclosed by the circuit are instantly polygonized and conquered**!
    - This rewards smart route planning: runners actively explore circular routes and loop back to claim vast multi-hectare parks and neighborhoods in a single workout.
@@ -44,7 +44,7 @@ One of GeoFit's most critical design principles is balancing competitive rivalry
 │   (Permanent Career Milestone)     │   (Live Dynamic Map Dominance)     │
 ├────────────────────────────────────┼────────────────────────────────────┤
 │ • Monotonically cumulative sum of  │ • Calculated strictly from:        │
-│   all verified conquered territory │   COUNT(active cells owned) * 43.58│
+│   all verified conquered territory │   COUNT(active cells owned) * 10 m²│
 │ • NEVER DECREASES, even if another │ • DECREASES when a rival runs      │
 │   runner invades your cells.       │   through and steals your sectors. │
 │ • Celebrates total athletic work.  │ • Drives active defense & rivalry. │
@@ -98,8 +98,8 @@ To ensure fair competition and prevent users from claiming territory while drivi
 ## 7. Privacy, Safe Zones & GDPR Compliance
 
 GeoFit takes runner safety and location privacy seriously:
-- **Configurable Privacy Zones**: Athletes can define circular Safe Zones around sensitive locations (home, school, workplace) with a custom radius (e.g., 200m–1000m).
-- **Perimeter Masking**: Any GPS points recorded inside an athlete’s designated Privacy Zone are truncated and stripped before being broadcast to public leaderboards or visible on community maps.
+- **Doorstep Territory Conquest Active Everywhere**: Athletes conquer hexagons everywhere they run without arbitrary suppression. 100% of traversed hexagons (including right outside your doorstep or hostel) are captured into your territory.
+- **Strict Start Point, End Point & Path Redaction**: Other users **NEVER** see where an athlete started, where they stopped, or their exact GPS running/walking route (`routeGeometry = null`, `startPoint = null`, `endPoint = null` for all non-owner queries). Public viewers only see claimed colored hexagon tiles on the tactical map.
 - **One-Click Account & Data Erasure**: Athletes have full autonomy under GDPR regulations to export their audit trails or permanently delete all personal location histories with a single button click.
 
 ---
@@ -122,7 +122,7 @@ GeoFit features a modern **Clean White & Slate theme** optimized specifically fo
 | :--- | :--- |
 | **Frontend Client** | React 18, Vite, MapLibre GL / Mapbox, Turf.js, H3-js, Lucide Icons, Tailwind CSS |
 | **Backend Server** | Node.js, Express, Socket.IO, Better-SQLite3 / PostgreSQL (WAL mode), Cookie-Parser |
-| **Spatial Engine** | Uber H3 Hexagonal Grid (Res 10), Turf.js Polygonization, Convex/Concave Hull |
+| **Spatial Engine** | Uber H3 Hexagonal Grid (Res 14 ~ 10 m²), Turf.js Polygonization, Planar Graph Enclosure |
 | **Security & Auth** | JWT HTTP-only Cookies, Bcrypt Password Hashing, Anti-Cheat Anomaly Engine |
 | **DevOps & Verification** | End-to-end automated verification scripts, Phase 1–14 engine regression suites |
 
@@ -134,7 +134,7 @@ GeoFit features a modern **Clean White & Slate theme** optimized specifically fo
 flowchart TD
     A[Athlete Starts Outdoor Run] --> B[GPS Tracks Real-Time Coordinates]
     B --> C{Anti-Cheat Validation}
-    C -- Valid Human Pace --> D[H3 Res-10 Spatial Engine Maps Cells]
+    C -- Valid Human Pace --> D[H3 Res-14 Spatial Engine Maps Cells]
     C -- Vehicle Speed Detected --> E[Flag Anomaly & Pause Capture]
     D --> F{Enclosed Loop Detected?}
     F -- Yes --> G[Polygonize All Interior Cells & Award Area]

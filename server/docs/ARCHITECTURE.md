@@ -61,7 +61,7 @@ erDiagram
    - `speed` (DOUBLE PRECISION): Speed in m/s.
 
 4. **`territory_cells`** (Dynamic Current Ownership State)
-   - `h3_cell_id` (VARCHAR(32), PK): Uber H3 Resolution 9 index.
+   - `h3_cell_id` (VARCHAR(32), PK): Uber H3 Resolution 14 index (~10 m²).
    - `current_owner_id` (VARCHAR(64), FK -> users.id): Current owner.
    - `current_owner_updated_at` (TIMESTAMP): Timestamp when owner took the cell.
    - `last_captured_at` (TIMESTAMP): Most recent capture event.
@@ -136,14 +136,13 @@ When **User B** captures a cell currently owned by **User A**:
 2. A new record is appended to `territory_history` (`user_id = user-b`, `activity_id = act-b`).
 3. **User A's records in `activities` remain 100% untouched.**
 4. **User A's records in `territory_history` remain 100% untouched.**
-5. User A's lifetime distance, weekly distance, and monthly rankings remain unchanged.
+5. User A's lifetime distance, weekly distance, and total area captured remain completely unchanged.
 
 ---
 
-## 3. Weekly & Monthly Aggregation Strategy
+## 3. Daily & Weekly 3-Sector Aggregation Strategy
 
-Weekly rankings are computed from **`weekly_statistics`**, which aggregates immutable activity records during that week window:
-
-$$\text{Weekly Score} = \text{Distance Score} + \text{Area Score} + \text{Challenge Score} + \text{Consistency Score} + \text{Unique Cells Score}$$
-
-- **Result:** A runner who historically ran 21 km will rank higher than a runner who ran 18 km, regardless of who holds more momentary territory at the end of the week.
+Rankings are computed across **Daily** and **Weekly** timeframes spanning 3 distinct sectors:
+1. **Distance Covered**: Sum of `distance` from valid activities within the time window.
+2. **Current Holding Area**: Live count of active `territory_cells` currently owned on the map grid ($\times 10\text{ m²}$).
+3. **Total Area Captured**: Monotonic cumulative sum of `area_covered` captured during the period (never drops on rival takeovers).
