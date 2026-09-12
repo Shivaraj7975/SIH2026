@@ -5,8 +5,8 @@ import { FITNESS_CONFIG } from '../config/fitness.config.js';
 // Resolution 14 provides ultra-precise single-lane road & track hexagon coverage (~1.34m edge, ~2.68m diameter, ~0.00000616 km2 area)
 export const H3_DEFAULT_RESOLUTION = FITNESS_CONFIG.GEOMETRY.H3_RESOLUTION || 14;
 
-// Area per cell at Res 14 in km² (used for coverage calculations: ~6.16 m²)
-export const H3_CELL_AREA_KM2 = FITNESS_CONFIG.GEOMETRY.H3_CELL_AREA_KM2 || 0.00000616;
+// Area per cell at Res 14 in km² (used for coverage calculations: ~10 m² = 0.000010 km²)
+export const H3_CELL_AREA_KM2 = FITNESS_CONFIG.GEOMETRY.H3_CELL_AREA_KM2 || 0.000010;
 
 // Centralized configurable geometric closure tolerance (in meters)
 export const CLOSURE_TOLERANCE_METERS = FITNESS_CONFIG.GEOMETRY.PROXIMITY_CLOSURE_TOLERANCE_METERS || 20;

@@ -102,7 +102,7 @@ export class PrivacyService {
 
     const settings = await PrivacyRepository.getSettings(activity.userId);
 
-    // Non-owners: Redact exact route geometry and sanitize private metadata
+    // Non-owners: ALWAYS redact exact route geometry, start/end points, and path coordinates
     const sanitized = {
       id: activity.id,
       userId: settings.anonymousLeaderboard ? 'anonymous' : activity.userId,
@@ -114,9 +114,11 @@ export class PrivacyService {
       areaCovered: activity.areaCovered,
       validationStatus: activity.validationStatus,
       createdAt: activity.createdAt,
-      routeGeometry: settings.hideRouteGeometry || !settings.isProfilePublic
-        ? null
-        : activity.routeGeometry, // Redacted if user set private
+      routeGeometry: null, // Always private from others: no one sees your path, starting point, or ending point
+      startPoint: null,
+      endPoint: null,
+      gpsPoints: null,
+      rawGpsPoints: null,
       isSanitizedForPrivacy: true,
     };
 
@@ -129,8 +131,8 @@ export class PrivacyService {
   static getLocationPrivacyDisclosure() {
     return {
       title: 'GeoFit Location Privacy & Data Security Policy',
-      version: '1.0.0',
-      lastUpdated: '2026-09-08',
+      version: '2.0.0',
+      lastUpdated: '2026-09-12',
       sections: [
         {
           heading: '1. Why Location Data is Required',
@@ -143,7 +145,7 @@ export class PrivacyService {
         {
           heading: '2. What Data We Store',
           points: [
-            'Raw GPS points during an active workout (latitude, longitude, timestamp, accuracy, speed) for validation audits.',
+            'Raw GPS points during an active workout (latitude, longitude, timestamp, accuracy, speed) for personal history and validation audits.',
             'Permanent fitness metrics (distance in km, duration in minutes, calories burned, sectors conquered).',
             'Historical cell conquest timestamps and owner IDs.',
           ],
@@ -152,16 +154,16 @@ export class PrivacyService {
           heading: '3. What is Visible to Other Players',
           points: [
             'Public H3 hexagonal sector ownership color and display name on the tactical map.',
-            'Weekly and monthly leaderboard scores, rank, and active days.',
+            'Weekly and daily leaderboard scores, rank, and active days.',
             'NEVER your live real-time GPS coordinates.',
-            'NEVER your private raw GPS coordinates or private historical tracks.',
-            'NEVER territory inside your configured Privacy Zones (Home, Workplace).',
+            'NEVER your starting point, ending point, or exact running/walking path coordinates.',
+            'Every hexagon you traverse is fully credited to your territory anywhere you move (including your doorstep).',
           ],
         },
         {
           heading: '4. Privacy Controls & Safe Zones',
           points: [
-            'Privacy Zones: Define a radius (e.g., 300m–1000m) around your Home or Workplace. Any movement inside these zones will never claim public territory.',
+            'Route & Endpoint Privacy: Only you can view your running trail and start/finish coordinates. All public views see only claimed hexagons.',
             'Anonymous Leaderboard Mode: Hide your username and display as an anonymous athlete.',
             'Right to be Forgotten: Delete individual activities or request complete account data wiping at any time.',
           ],

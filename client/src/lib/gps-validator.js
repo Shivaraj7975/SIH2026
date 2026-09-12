@@ -1,9 +1,9 @@
 import { calculateDistanceMeters, latLngToH3 } from './spatial.js';
 
 export const GPS_CONFIG = {
-  MAX_ACCURACY_METERS: 120, // Allows browser/laptop WiFi geolocation and urban indoor testing
+  MAX_ACCURACY_METERS: 350, // Allows browser/laptop WiFi geolocation and urban indoor/outdoor testing
   MAX_HUMAN_SPEED_MS: 15.0,
-  MIN_DISTANCE_DELTA_METERS: 0.8,
+  MIN_DISTANCE_DELTA_METERS: 0.4,
   MIN_TIME_DELTA_MS: 200,
   MAX_FUTURE_TIME_DRIFT_MS: 60000,
 };

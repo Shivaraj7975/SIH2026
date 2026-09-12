@@ -10,7 +10,7 @@ async function cleanLegacyCells() {
   for (const row of cells) {
     try {
       const res = h3.getResolution(row.h3_cell_id);
-      if (res !== 11) {
+      if (res !== 14) {
         await query('DELETE FROM territory_cells WHERE h3_cell_id = $1', [row.h3_cell_id]);
         await query('DELETE FROM territory_history WHERE h3_cell_id = $1', [row.h3_cell_id]);
         deletedCount++;
@@ -21,7 +21,7 @@ async function cleanLegacyCells() {
     }
   }
 
-  console.log(`🧹 Cleaned ${deletedCount} legacy oversized cells from database. Remaining cells are 100% road-width Res 11.`);
+  console.log(`🧹 Cleaned ${deletedCount} legacy oversized cells from database. Remaining cells are 100% precision ~10 m² Res 14.`);
   process.exit(0);
 }
 

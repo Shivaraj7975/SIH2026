@@ -111,28 +111,28 @@ async function runPhase11PrivacyTests() {
   assert(workoutWithMasking.validationStatus === 'VALID', 'Workout is valid');
   assert(workoutWithMasking.activity.distance > 0, 'Full distance credited to athlete for fitness motivation');
 
-  // Invariant Check: homeHex MUST NOT be captured on public territory
+  // Invariant Check: homeHex (doorstep) IS successfully captured into athlete's territory
   const homeCellInDb = await TerritoryRepository.findCellById(homeHex);
-  assert(homeCellInDb === null || homeCellInDb.currentOwnerId !== athleteA, 'Home H3 sector is NOT claimed as public territory');
+  assert(homeCellInDb !== null && homeCellInDb.currentOwnerId === athleteA, 'Home/Doorstep H3 sector IS successfully conquered into territory');
 
-  // Outside hex CAN be captured
+  // Outside hex CAN also be captured
   const outsideCellInDb = await TerritoryRepository.findCellById(outsideHex);
   assert(outsideCellInDb !== null && outsideCellInDb.currentOwnerId === athleteA, 'Outside H3 sector is successfully conquered');
 
   // ----------------------------------------------------
   // TEST 4: Exact GPS Route Privacy & Non-Owner Sanitization
   // ----------------------------------------------------
-  console.log('\n4️⃣ Testing Route Geometry Redaction for Non-Owners...');
+  console.log('\n4️⃣ Testing Route Geometry & Endpoint Redaction for Non-Owners...');
   const aliceActivity = await ActivitiesRepository.findById(workoutWithMasking.activity.id);
 
   // When Alice requests her own activity: full route geometry is returned
   const aliceView = await PrivacyService.sanitizeActivity(aliceActivity, athleteA);
   assert(aliceView.routeGeometry !== null, 'Owner (Alice) can view her own private route geometry');
 
-  // When Bob requests Alice's activity: route geometry is redacted if hideRouteGeometry is enabled
-  await PrivacyRepository.updateSettings(athleteA, { hideRouteGeometry: true });
+  // When Bob requests Alice's activity: route geometry and start/end points are strictly redacted
   const bobView = await PrivacyService.sanitizeActivity(aliceActivity, athleteB);
   assert(bobView.routeGeometry === null, 'Non-owner (Bob) receives redacted route geometry (null)');
+  assert(bobView.startPoint === null && bobView.endPoint === null, 'Non-owner (Bob) cannot see Alice start or end point');
   assert(bobView.distance === aliceActivity.distance, 'Aggregated distance remains transparent');
 
   // ----------------------------------------------------

@@ -188,7 +188,7 @@ export default function PrivacySettingsModal({ isOpen, onClose, activeUserId }) 
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Configure safe zones, identity masking, and audit exact location sharing
+                Doorstep conquest active everywhere. Your start/end points and exact path are strictly private.
               </p>
             </div>
           </div>
@@ -248,26 +248,20 @@ export default function PrivacySettingsModal({ isOpen, onClose, activeUserId }) 
         {/* TAB 1: Privacy Controls */}
         {activeTab === 'controls' && (
           <div className="space-y-3 animate-in fade-in duration-150">
-            {/* Control 1: Mask Privacy Zones */}
+            {/* Control 1: Mask Start/End Points and Path */}
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <Home className="w-4 h-4 text-cyan-400" />
-                  <h4 className="text-sm font-bold text-white">Mask Privacy Zones from Map Territory</h4>
+                  <Shield className="w-4 h-4 text-cyan-400" />
+                  <h4 className="text-sm font-bold text-white">Hide Start Point, End Point & Exact Path</h4>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Automatically suppress public territory claims inside your defined Safe Zones (Home, Workplace).
+                  Other athletes only see conquered hexagon tiles. Your starting point, ending point, and exact GPS path are strictly hidden.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => handleToggleSetting('maskPrivacyZones')}
-                className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                  settings.maskPrivacyZones ? 'bg-cyan-500 justify-end' : 'bg-slate-700 justify-start'
-                }`}
-              >
-                <span className="w-4 h-4 rounded-full bg-white shadow-md" />
-              </button>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 border border-emerald-800 px-2.5 py-1 rounded-full font-bold uppercase">
+                Enforced
+              </span>
             </div>
 
             {/* Control 2: Anonymous Leaderboard */}
@@ -321,7 +315,7 @@ export default function PrivacySettingsModal({ isOpen, onClose, activeUserId }) 
           <div className="space-y-4 animate-in fade-in duration-150">
             <div className="flex items-center justify-between">
               <p className="text-xs text-slate-400">
-                Any GPS points recorded within safe zones are excluded from public territory claims.
+                Doorstep conquest is enabled for all sectors. Safe zones ensure your start and finish areas never reveal personal travel routes.
               </p>
               <Button
                 variant={isAddingZone ? 'outline' : 'primary'}

@@ -81,6 +81,25 @@ export const PREDEFINED_ROUTES = {
     { latitude: 12.9785, longitude: 77.5845, accuracy: 5, speed: 3.2 },
     { latitude: 12.9800, longitude: 77.5830, accuracy: 4, speed: 3.1 },
   ],
+
+  // ROUTE_ZIGZAG: Urban Agility Zig-Zag Route with rapid directional cuts
+  ROUTE_ZIGZAG: [
+    { latitude: 12.9710, longitude: 77.5940, accuracy: 4, speed: 3.1 },
+    { latitude: 12.9718, longitude: 77.5952, accuracy: 4, speed: 3.3 },
+    { latitude: 12.9712, longitude: 77.5960, accuracy: 4, speed: 3.0 },
+    { latitude: 12.9722, longitude: 77.5972, accuracy: 4, speed: 3.2 },
+    { latitude: 12.9715, longitude: 77.5980, accuracy: 4, speed: 3.1 },
+    { latitude: 12.9726, longitude: 77.5992, accuracy: 4, speed: 3.2 },
+  ],
+
+  // ROUTE_STRAIGHT: Linear corridor sprint
+  ROUTE_STRAIGHT: [
+    { latitude: 12.9710, longitude: 77.5940, accuracy: 4, speed: 3.4 },
+    { latitude: 12.9720, longitude: 77.5950, accuracy: 4, speed: 3.5 },
+    { latitude: 12.9730, longitude: 77.5960, accuracy: 4, speed: 3.4 },
+    { latitude: 12.9740, longitude: 77.5970, accuracy: 4, speed: 3.5 },
+    { latitude: 12.9750, longitude: 77.5980, accuracy: 4, speed: 3.3 },
+  ],
 };
 
 export class DemoService {

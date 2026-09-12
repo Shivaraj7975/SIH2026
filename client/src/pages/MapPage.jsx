@@ -31,6 +31,7 @@ export default function MapPage() {
   const [selectedSector, setSelectedSector] = useState(null);
   const [isHudOpen, setIsHudOpen] = useState(false);
   const [realtimeAlert, setRealtimeAlert] = useState(null);
+  const [followUser, setFollowUser] = useState(false);
 
   const fetchTerritory = useCallback(async () => {
     setLoading(true);
@@ -65,13 +66,13 @@ export default function MapPage() {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           if (!isNaN(lat) && !isNaN(lng)) {
-            setUserLocation({ latitude: lat, longitude: lng });
+            setUserLocation({ latitude: lat, longitude: lng, forceFly: true });
           }
         },
         (err) => {
           console.log('Location prompt deferred or defaulted to hub coordinates');
         },
-        { enableHighAccuracy: false, timeout: 2000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
       );
     }
   }, []);
@@ -191,9 +192,10 @@ export default function MapPage() {
 
   const handleWorkoutStart = useCallback(
     ({ isSimulated, circuit }) => {
-      isManualLocationRef.current = true;
       setActiveTrail([]);
       if (isSimulated) {
+        isManualLocationRef.current = true;
+        setFollowUser(false);
         // Clear all previous hexes belonging to active user so simulation starts fresh
         setTerritoryGeoJson((prev) => ({
           type: 'FeatureCollection',
@@ -201,6 +203,11 @@ export default function MapPage() {
             (f) => f.properties?.owner_id !== user?.id && !f.properties?.just_captured
           ),
         }));
+      } else {
+        // Real Live GPS tracker: enable live GPS updates, fly camera to current position and follow user
+        isManualLocationRef.current = false;
+        setFollowUser(true);
+        setUserLocation((prev) => (prev ? { ...prev, forceFly: true } : prev));
       }
     },
     [user?.id]
@@ -208,6 +215,7 @@ export default function MapPage() {
 
   const handleWorkoutComplete = useCallback(
     (data) => {
+      setFollowUser(false);
       // Retain current view and prevent camera relocation
       isManualLocationRef.current = true;
 
@@ -371,6 +379,8 @@ export default function MapPage() {
               error={error}
               onRetry={fetchTerritory}
               initialCenter={[userLocation.longitude, userLocation.latitude]}
+              followUser={followUser}
+              onFollowUserChange={setFollowUser}
             />
           </div>
 

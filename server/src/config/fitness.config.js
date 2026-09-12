@@ -47,8 +47,8 @@ export const FITNESS_CONFIG = {
     PROXIMITY_CLOSURE_TOLERANCE_METERS: 45.0, // Radius to snap loop closure to earlier route geometry/segments (20-45m)
     MIN_ENCLOSED_POLYGON_AREA_M2: 5.0,        // Minimum polygon area to qualify as valid enclosed territory
     MIN_LOOP_POINTS: 3,                       // Minimum vertices to form a closed ring
-    H3_RESOLUTION: 13,                        // Road/track hexagon resolution (~3.6m edge, ~7.2m diameter, ~43 m² area)
-    H3_CELL_AREA_KM2: 0.000043,               // Area per cell at Res 13 (~43 m²)
-    INTERPOLATION_STEP_METERS: 2.0,           // Path interpolation density for continuous hex coverage
+    H3_RESOLUTION: 14,                        // High-density hexagon resolution (~1.34m edge, ~2.68m diameter, ~10 m² area)
+    H3_CELL_AREA_KM2: 0.000010,               // Area per cell (~10 m² = 0.000010 km²)
+    INTERPOLATION_STEP_METERS: 1.2,           // Path interpolation density for continuous hex coverage
   },
 };

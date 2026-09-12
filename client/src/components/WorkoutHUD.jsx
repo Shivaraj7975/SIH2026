@@ -27,46 +27,36 @@ import LocationPermissionModal from './workout/LocationPermissionModal.jsx';
 import DailyResultModal from './ui/DailyResultModal.jsx';
 import { sounds } from '../lib/audio.js';
 
+import { RUNNING_RAW_DATA } from '../data/runningRawData.js';
+
 const DEMO_CIRCUITS = {
-  small_curve: {
-    name: 'Small Curved Loop (Fast Demo, ~40m)',
-    coords: [
-      [77.59440, 12.97100],
-      [77.59460, 12.97110],
-      [77.59470, 12.97125],
-      [77.59455, 12.97140],
-      [77.59435, 12.97135],
-      [77.59425, 12.97115],
-      [77.59440, 12.97100],
-    ],
+  curve: {
+    name: 'Curved Loop Run (~40m, Enclosed Area)',
+    coords: RUNNING_RAW_DATA.curve.coords,
+  },
+  straight_line: {
+    name: 'Straight Line Sprint (~150m, Corridor)',
+    coords: RUNNING_RAW_DATA.straight_line.coords,
+  },
+  zigzag: {
+    name: 'Zig-Zag Route (~160m, Agility Cuts)',
+    coords: RUNNING_RAW_DATA.zigzag.coords,
+  },
+  zigzag_loop: {
+    name: 'Zig-Zag Enclosed Circuit (~180m)',
+    coords: RUNNING_RAW_DATA.zigzag_loop.coords,
   },
   cubbon_park: {
-    name: 'Cubbon Park Loop, Bengaluru',
-    coords: [
-      [77.5944, 12.9710], // Vittal Mallya Road / UB City Start
-      [77.5960, 12.9725], // Kasturba Road Junction
-      [77.5950, 12.9740], // South Park Entry
-      [77.5930, 12.9755], // Queen Victoria Statue
-      [77.5955, 12.9770], // Press Club Circuit
-      [77.5975, 12.9755], // Central Library Circle
-      [77.5960, 12.9725], // Kasturba Cross (Loop Closure Junction)
-      [77.5944, 12.9710], // Return to UB City
-    ],
+    name: 'Cubbon Park Loop, Bengaluru (~1.2km)',
+    coords: RUNNING_RAW_DATA.cubbon_park.coords,
   },
   central_park: {
-    name: 'Central Park Reservoir Loop, NYC',
-    coords: [
-      [-73.9654, 40.7829],
-      [-73.9645, 40.7838],
-      [-73.9638, 40.7845],
-      [-73.9625, 40.7856],
-      [-73.9615, 40.7868],
-      [-73.9632, 40.7878],
-      [-73.9650, 40.7885],
-      [-73.9668, 40.7875],
-      [-73.9670, 40.7840],
-      [-73.9654, 40.7829],
-    ],
+    name: 'Central Park Reservoir Loop, NYC (~2.5km)',
+    coords: RUNNING_RAW_DATA.central_park.coords,
+  },
+  small_curve: {
+    name: 'Small Curved Loop (Fast Demo, ~40m)',
+    coords: RUNNING_RAW_DATA.curve.coords,
   },
 };
 
@@ -413,9 +403,12 @@ export default function WorkoutHUD({
                 }}
                 className="bg-white text-slate-800 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-purple-600 font-medium"
               >
-                <option value="small_curve">Small Curved Loop (~40m, Fast Demo)</option>
-                <option value="cubbon_park">Cubbon Park Loop, Bengaluru</option>
-                <option value="central_park">Central Park Reservoir, NYC</option>
+                <option value="curve">Curved Loop (~40m, Enclosed Area)</option>
+                <option value="straight_line">Straight Line Sprint (~150m, Corridor)</option>
+                <option value="zigzag">Zig-Zag Route (~160m, Agility Cuts)</option>
+                <option value="zigzag_loop">Zig-Zag Enclosed Circuit (~180m)</option>
+                <option value="cubbon_park">Cubbon Park Loop, Bengaluru (~1.2km)</option>
+                <option value="central_park">Central Park Reservoir, NYC (~2.5km)</option>
               </select>
             </div>
 

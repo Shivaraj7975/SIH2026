@@ -50,6 +50,8 @@ export default function MapContainer({
   error = null,
   onRetry = null,
   className = '',
+  followUser: controlledFollowUser,
+  onFollowUserChange,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -59,7 +61,16 @@ export default function MapContainer({
   const [is3dPitch, setIs3dPitch] = useState(true);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
-  const [followUser, setFollowUser] = useState(false);
+  const [internalFollowUser, setInternalFollowUser] = useState(false);
+  const followUser = controlledFollowUser !== undefined ? controlledFollowUser : internalFollowUser;
+
+  const setFollowUser = useCallback(
+    (val) => {
+      setInternalFollowUser(val);
+      if (onFollowUserChange) onFollowUserChange(val);
+    },
+    [onFollowUserChange]
+  );
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -158,7 +169,7 @@ export default function MapContainer({
           duration: 1000,
         });
       } catch (err) {}
-    } else {
+    } else if (followUser) {
       // Smooth incremental tracking during movement
       try {
         mapInstance.easeTo({
@@ -167,7 +178,7 @@ export default function MapContainer({
         });
       } catch (err) {}
     }
-  }, [mapInstance, userLocation?.latitude, userLocation?.longitude, userLocation?.forceFly, is3dPitch]);
+  }, [mapInstance, userLocation?.latitude, userLocation?.longitude, userLocation?.forceFly, is3dPitch, followUser]);
 
   const handleLocateMe = useCallback(() => {
     if (!mapInstance) return;

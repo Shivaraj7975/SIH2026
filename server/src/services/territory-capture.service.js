@@ -119,17 +119,8 @@ export class TerritoryCaptureService {
       };
     }
 
-    // 5. Privacy Zone Filtering & Territory Capture
-    const privacySettings = await PrivacyRepository.getSettings(userId);
-    let conquestEligibleCells = cellsCovered;
-
-    if (privacySettings.maskPrivacyZones) {
-      const userPrivacyZones = await PrivacyRepository.getPrivacyZones(userId);
-      if (userPrivacyZones.length > 0) {
-        const { pointsWithPrivacyFlags } = PrivacyService.evaluatePrivacyZones(cleanPoints, userPrivacyZones);
-        conquestEligibleCells = PrivacyService.filterPublicConquestCells(cellsCovered, pointsWithPrivacyFlags);
-      }
-    }
+    // 5. Territory Capture (All traversed hexagons are conquest-eligible, including doorstep/home)
+    const conquestEligibleCells = cellsCovered;
 
     const {
       newCaptures,

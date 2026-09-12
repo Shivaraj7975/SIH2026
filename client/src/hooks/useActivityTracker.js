@@ -489,11 +489,14 @@ export function useActivityTracker({
 
       setAccuracyMeters(Math.round(raw.accuracy || 10));
 
+      const isFirstPoint = previousPointRef.current === null;
       const livePt = {
         latitude: raw.latitude,
         longitude: raw.longitude,
         accuracy: Math.round(raw.accuracy || 10),
         timestamp: raw.timestamp,
+        speed: raw.speed,
+        forceFly: isFirstPoint,
       };
       setUserLocation(livePt);
       if (onLocationUpdate) {
