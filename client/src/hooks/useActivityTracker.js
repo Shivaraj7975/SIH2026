@@ -918,6 +918,10 @@ export function useActivityTracker({
       const clientMetrics = computeFullMetrics(gpsPoints, 70, capturedHexes);
       clientMetrics.durationSeconds = activeSeconds;
 
+      const hexList = clientMetrics.uniqueCells && clientMetrics.uniqueCells.length > 0
+        ? clientMetrics.uniqueCells
+        : Array.from(capturedHexes);
+
       try {
         const isSim = Boolean(isSimulated || isSimulatedRef.current);
         const data = await api.post('/activity', {
@@ -931,11 +935,7 @@ export function useActivityTracker({
           isSimulated: isSim,
         });
 
-        const hexList = clientMetrics.uniqueCells && clientMetrics.uniqueCells.length > 0
-          ? clientMetrics.uniqueCells
-          : Array.from(capturedHexes);
-
-        if (data.success) {
+        if (data && data.success) {
           GpsBuffer.clearBuffer();
           const finalResult = {
             ...data.data,
@@ -969,12 +969,15 @@ export function useActivityTracker({
           };
           setSummaryData(fallbackSummary);
           setState(ACTIVITY_STATES.COMPLETED);
+          try {
+            sounds.playVictoryFanfare();
+          } catch (e) {}
           if (onActivityComplete) {
             onActivityComplete(fallbackSummary);
           }
         }
       } catch (err) {
-        console.error('Failed to submit activity to server:', err);
+        console.error('Failed to submit activity to server (displaying local workout summary):', err);
         const fallbackSummary = {
           activityId: `act-${Date.now()}`,
           metrics: clientMetrics,
@@ -991,6 +994,9 @@ export function useActivityTracker({
         };
         setSummaryData(fallbackSummary);
         setState(ACTIVITY_STATES.COMPLETED);
+        try {
+          sounds.playVictoryFanfare();
+        } catch (e) {}
         if (onActivityComplete) {
           onActivityComplete(fallbackSummary);
         }
