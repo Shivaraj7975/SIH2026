@@ -6,8 +6,12 @@ export function initSocketServer(httpServer) {
   const io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        // Allow all local dev origins (e.g. 5173, 5174, 3000) or matching env
-        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):[0-9]+$/.test(origin) || origin === process.env.CLIENT_URL) {
+        if (
+          !origin ||
+          /^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(origin) ||
+          origin.endsWith('.vercel.app') ||
+          origin === process.env.CLIENT_URL
+        ) {
           callback(null, true);
         } else {
           callback(null, true);

@@ -3,60 +3,35 @@ import {
   Play,
   Pause,
   Square,
-  Flame,
-  Timer,
-  Gauge,
-  MapPin,
   Sparkles,
   Navigation,
-  Cpu,
-  Volume2,
-  VolumeX,
   Footprints,
   Activity,
   Radio,
-  Coffee,
   Shield,
-  Layers,
-  AlertTriangle,
-  Clock,
-  Bug,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { useActivityTracker, ACTIVITY_STATES } from '../hooks/useActivityTracker.js';
 import LocationPermissionModal from './workout/LocationPermissionModal.jsx';
 import DailyResultModal from './ui/DailyResultModal.jsx';
-import { sounds } from '../lib/audio.js';
-
 import { RUNNING_RAW_DATA } from '../data/runningRawData.js';
 
-const DEMO_CIRCUITS = {
+export const DEMO_CIRCUITS = {
   curve: {
-    name: 'Curved Loop Run (~40m, Enclosed Area)',
+    id: 'curve',
+    name: 'Curved On-Road Loop (~180m)',
     coords: RUNNING_RAW_DATA.curve.coords,
   },
-  straight_line: {
-    name: 'Straight Line Sprint (~150m, Corridor)',
-    coords: RUNNING_RAW_DATA.straight_line.coords,
+  garden_crescent: {
+    id: 'garden_crescent',
+    name: 'Garden Crescent Loop (~190m)',
+    coords: RUNNING_RAW_DATA.garden_crescent.coords,
   },
-  zigzag: {
-    name: 'Zig-Zag Route (~160m, Agility Cuts)',
-    coords: RUNNING_RAW_DATA.zigzag.coords,
-  },
-  zigzag_loop: {
-    name: 'Zig-Zag Enclosed Circuit (~180m)',
-    coords: RUNNING_RAW_DATA.zigzag_loop.coords,
-  },
-  cubbon_park: {
-    name: 'Cubbon Park Loop, Bengaluru (~1.2km)',
-    coords: RUNNING_RAW_DATA.cubbon_park.coords,
-  },
-  central_park: {
-    name: 'Central Park Reservoir Loop, NYC (~2.5km)',
-    coords: RUNNING_RAW_DATA.central_park.coords,
-  },
-  small_curve: {
-    name: 'Small Curved Loop (Fast Demo, ~40m)',
-    coords: RUNNING_RAW_DATA.curve.coords,
+  boulevard_rotary: {
+    id: 'boulevard_rotary',
+    name: 'Boulevard Rotary Curve (~175m)',
+    coords: RUNNING_RAW_DATA.boulevard_rotary.coords,
   },
 };
 
@@ -67,16 +42,6 @@ function formatSeconds(secs) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-function formatArea(areaM2, areaKm2) {
-  if (areaM2 >= 100000) {
-    return { val: areaKm2.toFixed(3), unit: 'km²' };
-  }
-  if (areaM2 >= 1000) {
-    return { val: areaM2.toLocaleString(), unit: 'm²' };
-  }
-  return { val: Math.round(areaM2).toString(), unit: 'm²' };
-}
-
 export default function WorkoutHUD({
   activeUser,
   onLocationUpdate,
@@ -84,16 +49,38 @@ export default function WorkoutHUD({
   onWorkoutComplete,
   onNewCellCaptured,
   onTrailUpdate,
+  className = '',
 }) {
-  const [trackingEngine, setTrackingEngine] = useState('real_gps');
+  const [trackingEngine, setTrackingEngine] = useState('simulated'); // 'simulated' | 'real_gps'
   const [activityType, setActivityType] = useState('RUN');
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [isDebugOpen, setIsDebugOpen] = useState(false);
+  const [selectedCircuit, setSelectedCircuit] = useState('curve');
+  const [simulationSpeed, setSimulationSpeed] = useState(8);
+  // Maximized by default on mobile screens (<1024px), minimized on desktop
+  const [isExpanded, setIsExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+  const [isPinned, setIsPinned] = useState(false); // If clicked, manual click controls take over from hover
 
-  const [selectedCircuit, setSelectedCircuit] = useState('small_curve');
-  const [simulationSpeed, setSimulationSpeed] = useState(2);
+  // Ensure mobile starts maximized on viewport changes
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024 && !isPinned) {
+        setIsExpanded(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isPinned]);
+
+  // Hold-to-confirm Stop state (1.2s hold duration to avoid accidental stop mid-run)
+  const [stopProgress, setStopProgress] = useState(0);
+  const stopTimerRef = useRef(null);
+  const stopStartTimeRef = useRef(null);
 
   const tracker = useActivityTracker({
     activeUser,
@@ -108,9 +95,19 @@ export default function WorkoutHUD({
     },
     onActivityComplete: (data) => {
       setIsSummaryModalOpen(true);
+      // On mobile keep maximized; on desktop return to minimized hover peek
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        setIsExpanded(true);
+      } else {
+        setIsExpanded(false);
+      }
+      setIsPinned(false);   // Return to standard idle hover peek mode
       if (onWorkoutComplete) onWorkoutComplete(data);
     },
   });
+
+  const isTracking = tracker.state === ACTIVITY_STATES.ACTIVE;
+  const isBreak = tracker.state === ACTIVITY_STATES.BREAK;
 
   const prevTrailLengthRef = useRef(-1);
   useEffect(() => {
@@ -121,7 +118,29 @@ export default function WorkoutHUD({
     }
   }, [tracker.trailCoordinates, onTrailUpdate]);
 
+  // Preview circuit start position
+  useEffect(() => {
+    if (trackingEngine === 'simulated' && tracker.state === ACTIVITY_STATES.IDLE) {
+      if (tracker.setSimulated) tracker.setSimulated(true);
+      const circuit = DEMO_CIRCUITS[selectedCircuit] || DEMO_CIRCUITS.curve;
+      if (onLocationUpdate && circuit.coords && circuit.coords[0]) {
+        onLocationUpdate({
+          latitude: circuit.coords[0][1],
+          longitude: circuit.coords[0][0],
+          accuracy: 5,
+          timestamp: Date.now(),
+          isSimulated: true,
+          forceFly: true,
+        });
+      }
+    }
+  }, [selectedCircuit, trackingEngine, tracker.state]);
+
   const handleStartClick = async () => {
+    setIsPinned(true);
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      setIsExpanded(false); // Automatically minimize into bottom bar when starting run on desktop
+    }
     if (trackingEngine === 'real_gps') {
       if (tracker.permissionState !== 'granted') {
         setIsPermissionModalOpen(true);
@@ -131,7 +150,7 @@ export default function WorkoutHUD({
       }
     } else {
       if (onWorkoutStart) onWorkoutStart({ isSimulated: true, circuit: selectedCircuit });
-      const circuit = DEMO_CIRCUITS[selectedCircuit] || DEMO_CIRCUITS.cubbon_park;
+      const circuit = DEMO_CIRCUITS[selectedCircuit] || DEMO_CIRCUITS.curve;
       tracker.startSimulatedTracking(circuit.coords, simulationSpeed);
     }
   };
@@ -140,400 +159,496 @@ export default function WorkoutHUD({
     const granted = await tracker.requestLocationPermission();
     if (granted) {
       setIsPermissionModalOpen(false);
+      setIsPinned(true);
+      if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+        setIsExpanded(false); // Automatically minimize into bottom bar when starting run on desktop
+      }
       if (onWorkoutStart) onWorkoutStart({ isSimulated: false });
       tracker.startTracking();
     }
   };
 
   const handleResumeClick = () => {
-    const circuit = DEMO_CIRCUITS[selectedCircuit] || DEMO_CIRCUITS.cubbon_park;
+    const circuit = DEMO_CIRCUITS[selectedCircuit] || DEMO_CIRCUITS.curve;
     tracker.resumeTracking(circuit.coords, simulationSpeed);
   };
 
-  const isTracking = tracker.state === ACTIVITY_STATES.ACTIVE;
-  const isBreak = tracker.state === ACTIVITY_STATES.BREAK;
+  // Hold to stop confirmation handlers (1.2s ring fill)
+  const startStopHold = () => {
+    stopStartTimeRef.current = Date.now();
+    stopTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - stopStartTimeRef.current;
+      const progress = Math.min(100, (elapsed / 1200) * 100);
+      setStopProgress(progress);
+
+      if (progress >= 100) {
+        clearInterval(stopTimerRef.current);
+        tracker.stopTracking({ reason: 'USER_STOPPED' });
+        setStopProgress(0);
+      }
+    }, 30);
+  };
+
+  const cancelStopHold = () => {
+    if (stopTimerRef.current) {
+      clearInterval(stopTimerRef.current);
+    }
+    setStopProgress(0);
+  };
+
   const metrics = tracker.liveMetrics;
   const distanceKm = metrics.distanceKm > 0 ? metrics.distanceKm.toFixed(2) : '0.00';
   const activeDurationFormatted = formatSeconds(tracker.activeSeconds);
-  const breakCountdownFormatted = formatSeconds(tracker.breakRemainingSeconds);
-  const paceFormatted = metrics.avgPaceMinKm > 0 ? metrics.avgPaceMinKm.toFixed(1) : '--:--';
-  const areaDisplay = formatArea(metrics.areaCoveredM2 || 0, metrics.areaCoveredKm2 || 0);
+  const paceFormatted = metrics.avgPaceMinKm > 0 ? metrics.avgPaceMinKm.toFixed(1) : null;
+  const hexesClaimed = tracker.capturedHexes?.size || 0;
 
   return (
-    <div className="w-full flex flex-col gap-3 pointer-events-auto font-sans">
-      <div className="bg-white/95 p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xl backdrop-blur-xl">
-        {/* Top Header Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                isTracking
-                  ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]'
-                  : isBreak
-                  ? 'bg-amber-500 animate-pulse shadow-[0_0_8px_#f59e0b]'
-                  : 'bg-slate-400'
-              }`}
-            />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-              {tracker.state === ACTIVITY_STATES.ACTIVE
-                ? 'Active Gameplay Tracking'
-                : tracker.state === ACTIVITY_STATES.BREAK
-                ? 'Break / Pause State'
-                : tracker.state === ACTIVITY_STATES.REQUESTING_LOCATION
-                ? 'Acquiring GPS Signal...'
-                : 'Ready to Conquer'}
-            </span>
+    <div
+      onMouseEnter={() => {
+        if (!isPinned && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+          setIsExpanded(true);
+        }
+      }}
+      onMouseLeave={() => {
+        if (!isPinned && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+          setIsExpanded(false);
+        }
+      }}
+      className={`glass-dark-sheet text-white rounded-2xl lg:rounded-3xl border border-slate-800 shadow-xl lg:shadow-2xl transition-all duration-300 overflow-hidden font-sans ${className}`}
+    >
+      {/* Drag & Collapse Handle Header */}
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsPinned(true);
+          setIsExpanded((prev) => !prev);
+        }}
+        className="pt-1.5 pb-1 lg:pt-2.5 lg:pb-1.5 px-3 lg:px-4 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/40 select-none group"
+        title={isExpanded ? 'Click to Minimize HUD' : 'Click to Expand HUD'}
+      >
+        <div className="w-8 lg:w-10 h-1 rounded-full bg-slate-600 group-hover:bg-slate-400 transition-colors mb-0.5 lg:mb-1" />
+      </div>
 
-            {isTracking && (
-              <span
-                className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                  tracker.accuracyQuality === 'HIGH'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : tracker.accuracyQuality === 'MEDIUM'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-rose-50 text-rose-700 border-rose-200'
-                }`}
+      {/* MINIMIZED / COLLAPSED STATE (Smooth Fade & Height Transition) */}
+      <div
+        className={`grid transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          !isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div
+            onClick={() => {
+              setIsPinned(true);
+              setIsExpanded(true);
+            }}
+            className="p-2.5 lg:p-3.5 pt-0.5 flex items-center justify-between gap-2.5 lg:gap-3 cursor-pointer hover:bg-slate-900/40 select-none"
+          >
+            {/* Mini 3 Stats */}
+            <div className="flex items-center gap-2.5 sm:gap-3.5 text-xs font-sans">
+              <div>
+                <span className="text-[9px] lg:text-[10px] uppercase font-semibold text-slate-400 block tracking-[0.06em]">Distance</span>
+                <span className="font-display font-bold text-xs sm:text-sm lg:text-base text-white tabular-nums">{distanceKm} km</span>
+              </div>
+              <div className="h-5 lg:h-6 w-px bg-slate-800" />
+              <div>
+                <span className="text-[9px] lg:text-[10px] uppercase font-semibold text-slate-400 block tracking-[0.06em]">
+                  {isBreak ? 'Break Left' : 'Time'}
+                </span>
+                <span
+                  className={`font-display font-bold text-xs sm:text-sm lg:text-base tabular-nums ${
+                    isBreak ? 'text-amber-400 animate-pulse' : 'text-[#A3E635]'
+                  }`}
+                >
+                  {isBreak ? formatSeconds(tracker.breakRemainingSeconds) : activeDurationFormatted}
+                </span>
+              </div>
+              <div className="h-5 lg:h-6 w-px bg-slate-800" />
+              <div>
+                <span className="text-[9px] lg:text-[10px] uppercase font-semibold text-slate-400 block tracking-[0.06em]">Pace</span>
+                <span className="font-display font-bold text-xs sm:text-sm lg:text-base text-white tabular-nums">
+                  {paceFormatted ? `${paceFormatted} min/km` : <span className="text-slate-500 font-display">-- : --</span>}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Action Controls in Minimized Bar */}
+            {!isTracking && !isBreak ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStartClick();
+                }}
+                className="px-3 py-1.5 lg:px-4 lg:py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-[11px] lg:text-xs rounded-lg lg:rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
-                <Radio className="w-2.5 h-2.5" />
-                {tracker.accuracyMeters ? `±${tracker.accuracyMeters}m GPS` : 'GPS Active'}
-              </span>
+                <Play className="w-3 h-3 lg:w-3.5 lg:h-3.5 fill-white" />
+                <span>Start</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 lg:gap-2" onClick={(e) => e.stopPropagation()}>
+                {/* Mini Pause / Resume Button */}
+                <button
+                  type="button"
+                  onClick={isBreak ? handleResumeClick : tracker.pauseTracking}
+                  className={`w-7 h-7 lg:w-8 lg:h-8 rounded-lg text-white flex items-center justify-center transition-transform active:scale-95 cursor-pointer shadow-xs ${
+                    isBreak ? 'bg-emerald-600 hover:bg-emerald-500 animate-pulse' : 'bg-[#7C3AED] hover:bg-[#6D28D9]'
+                  }`}
+                  title={isBreak ? 'Resume Run' : 'Pause Run'}
+                  aria-label={isBreak ? 'Resume Run' : 'Pause Run'}
+                >
+                  {isBreak ? (
+                    <Play className="w-3 h-3 lg:w-3.5 lg:h-3.5 fill-white translate-x-0.5" />
+                  ) : (
+                    <Pause className="w-3 h-3 lg:w-3.5 lg:h-3.5 fill-white" />
+                  )}
+                </button>
+
+                {/* Hold to Stop Button with 1.2s Fill Progress */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onMouseDown={startStopHold}
+                    onMouseUp={cancelStopHold}
+                    onMouseLeave={cancelStopHold}
+                    onTouchStart={startStopHold}
+                    onTouchEnd={cancelStopHold}
+                    className="px-2.5 py-1 lg:px-3 lg:py-1.5 rounded-lg bg-rose-950/90 hover:bg-rose-900 text-rose-300 border border-rose-700/80 text-[11px] lg:text-xs font-bold transition-all select-none cursor-pointer flex items-center gap-1 lg:gap-1.5 relative overflow-hidden shadow-xs"
+                    title="Press and hold 1.2s to stop run"
+                  >
+                    <Square className="w-2.5 h-2.5 lg:w-3 lg:h-3 fill-current shrink-0" />
+                    <span>Hold to Stop</span>
+                    <div
+                      className="absolute inset-y-0 left-0 bg-rose-600/50 transition-all duration-75 pointer-events-none"
+                      style={{ width: `${stopProgress}%` }}
+                    />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
+        </div>
+      </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsDebugOpen(!isDebugOpen)}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                isDebugOpen
-                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:text-purple-600'
-              }`}
-              title="Toggle Geometry Diagnostics Debug Panel"
-            >
-              <Bug className="w-4 h-4" />
-            </button>
+      {/* EXPANDED STATE (Smooth Accordion Grid Unfold Transition) */}
+      <div
+        className={`grid transition-all duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="p-3 sm:p-4 lg:p-5 pt-0 space-y-2 sm:space-y-2.5 lg:space-y-4">
+          {/* Status & Run/Walk Selector Header */}
+          <div className="flex items-center justify-between gap-2 pb-1.5 lg:pb-2.5 border-b border-slate-800/80">
+            <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
+              <span
+                className={`w-2 h-2 lg:w-2.5 lg:h-2.5 rounded-full shrink-0 ${
+                  isTracking
+                    ? 'bg-[#A3E635] animate-pulse shadow-[0_0_8px_#A3E635]'
+                    : isBreak
+                    ? 'bg-amber-400 animate-pulse'
+                    : 'bg-slate-600'
+                }`}
+              />
+              <span className="text-[11px] lg:text-xs font-semibold text-slate-200 tracking-tight truncate">
+                {tracker.state === ACTIVITY_STATES.ACTIVE
+                  ? trackingEngine === 'simulated' ? 'Active Test Run' : 'Active Live Run'
+                  : tracker.state === ACTIVITY_STATES.BREAK
+                  ? `Break State (${formatSeconds(tracker.breakRemainingSeconds)} left)`
+                  : 'Ready to Claim Territory'}
+              </span>
 
-            <button
-              type="button"
-              onClick={() => {
-                const next = sounds.toggle();
-                setSoundEnabled(next);
-              }}
-              className="p-1.5 text-slate-600 hover:text-purple-600 rounded-lg bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-              title="Toggle Audio Feedback"
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4 text-purple-600" /> : <VolumeX className="w-4 h-4" />}
-            </button>
+              {isTracking && (
+                <span
+                  className={`text-[10px] lg:text-[11px] font-sans font-medium px-1.5 lg:px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${
+                    trackingEngine === 'simulated'
+                      ? 'bg-purple-950/80 text-purple-300 border-purple-800'
+                      : (tracker.accuracyMeters || 4) <= 5
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                      : 'bg-amber-950/80 text-amber-300 border-amber-800'
+                  }`}
+                >
+                  <Radio className="w-2.5 h-2.5 lg:w-3 lg:h-3" />
+                  {trackingEngine === 'simulated' ? `Sim ${simulationSpeed}x` : 'GPS ±4m'}
+                </span>
+              )}
+            </div>
 
+            {/* Run / Walk Toggle (Visible when idle) */}
             {!isTracking && !isBreak && (
-              <div className="flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-xs">
+              <div className="flex items-center p-0.5 bg-slate-800/90 rounded-lg border border-slate-700/80 text-[11px] lg:text-xs font-semibold shrink-0">
                 <button
                   type="button"
                   onClick={() => setActivityType('RUN')}
-                  className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                    activityType === 'RUN'
-                      ? 'bg-purple-600 text-white font-black shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                  className={`px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md transition-colors cursor-pointer ${
+                    activityType === 'RUN' ? 'bg-[#7C3AED] text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Activity className="w-3.5 h-3.5 inline mr-1" />
+                  <Activity className="w-3 h-3 inline mr-1" />
                   Run
                 </button>
                 <button
                   type="button"
                   onClick={() => setActivityType('WALK')}
-                  className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                    activityType === 'WALK'
-                      ? 'bg-purple-600 text-white font-black shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                  className={`px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md transition-colors cursor-pointer ${
+                    activityType === 'WALK' ? 'bg-[#7C3AED] text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Footprints className="w-3.5 h-3.5 inline mr-1" />
+                  <Footprints className="w-3 h-3 inline mr-1" />
                   Walk
                 </button>
               </div>
             )}
+          </div>
 
-            {!isTracking && !isBreak && (
-              <div className="flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-xs">
+          {/* Break State Active Banner (5m countdown) */}
+          {isBreak && (
+            <div className="flex items-center justify-between p-2 lg:p-2.5 bg-amber-950/70 border border-amber-500/60 rounded-xl text-amber-200 text-xs shadow-inner">
+              <div className="flex items-center gap-2">
+                <span className="text-base animate-pulse">⏸️</span>
+                <div>
+                  <span className="font-bold block text-amber-100">Workout Paused</span>
+                  <span className="text-[10px] text-amber-300 font-mono">
+                    Auto-ends in {formatSeconds(tracker.breakRemainingSeconds)} if inactive (5m limit)
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleResumeClick}
+                className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+              >
+                <Play className="w-3 h-3 fill-current translate-x-0.5" />
+                Resume
+              </button>
+            </div>
+          )}
+
+          {/* Break Cooldown / Restriction Warning Toast */}
+          {tracker.breakWarningMessage && (
+            <div className="p-2 lg:p-2.5 bg-rose-950/80 border border-rose-600/70 rounded-xl text-rose-200 text-xs font-semibold flex items-center gap-2 shadow-sm animate-pulse">
+              <span>⚠️</span>
+              <span>{tracker.breakWarningMessage}</span>
+            </div>
+          )}
+
+          {/* Mode Switch: Compact Segmented Control (Test Run | Live GPS) */}
+          {!isTracking && !isBreak && (
+            <div className="space-y-1.5 lg:space-y-2">
+              <div className="h-8 sm:h-9 lg:h-10 p-0.5 lg:p-1 bg-slate-800/90 rounded-lg lg:rounded-xl border border-slate-700/80 grid grid-cols-2 gap-1 text-[11px] lg:text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrackingEngine('simulated');
+                    if (tracker.setSimulated) tracker.setSimulated(true);
+                  }}
+                  className={`flex items-center justify-center gap-1.5 rounded-md lg:rounded-lg transition-all cursor-pointer ${
+                    trackingEngine === 'simulated'
+                      ? 'bg-[#7C3AED] text-white shadow-xs font-bold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>🧪</span>
+                  <span>Test Run</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
                     setTrackingEngine('real_gps');
                     if (tracker.setSimulated) tracker.setSimulated(false);
                   }}
-                  className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 rounded-md lg:rounded-lg transition-all cursor-pointer ${
                     trackingEngine === 'real_gps'
-                      ? 'bg-slate-900 text-white font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Navigation className="w-3 h-3 inline mr-1" />
-                  Real GPS
+                  <span>🛰️</span>
+                  <span>Live GPS</span>
                 </button>
+              </div>
+
+              {/* Road Circuit + Speed in 1 Row (Under mode switch when Test Run is active) */}
+              {trackingEngine === 'simulated' && (
+                <div className="flex items-center justify-between gap-1.5 lg:gap-2 p-1.5 lg:p-2 bg-slate-800/50 border border-slate-700/60 rounded-lg lg:rounded-xl text-[11px] lg:text-xs">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <select
+                      value={selectedCircuit}
+                      onChange={(e) => setSelectedCircuit(e.target.value)}
+                      className="w-full bg-slate-900 text-slate-100 border border-slate-700 rounded-md lg:rounded-lg px-2 py-0.5 lg:px-2.5 lg:py-1 text-[11px] lg:text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[#7C3AED] cursor-pointer truncate"
+                    >
+                      <option value="curve">🏃 Curved Loop (~180m)</option>
+                      <option value="garden_crescent">🌿 Garden Crescent (~190m)</option>
+                      <option value="boulevard_rotary">🔄 Boulevard Rotary (~175m)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {[1, 2, 4, 8].map((spd) => (
+                      <button
+                        key={spd}
+                        type="button"
+                        onClick={() => setSimulationSpeed(spd)}
+                        className={`px-1.5 lg:px-2 py-0.5 rounded text-[10px] lg:text-[11px] font-sans font-semibold transition-all cursor-pointer ${
+                          simulationSpeed === spd
+                            ? 'bg-[#7C3AED] text-white'
+                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {spd}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Glanceable mid-run stats grid */}
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:gap-2.5 text-center">
+            {/* 1. Distance */}
+            <div className="bg-slate-900/90 p-1.5 sm:p-2.5 lg:p-3 rounded-xl lg:rounded-2xl border border-slate-800">
+              <span className="text-[9px] sm:text-[10px] lg:text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748B] block mb-0.5 lg:mb-1">
+                Distance
+              </span>
+              <div className="flex items-baseline justify-center gap-0.5 lg:gap-1">
+                <span className="text-xl sm:text-2xl lg:text-[44px] font-display font-bold tabular-nums tracking-tight text-white">
+                  {distanceKm}
+                </span>
+                <span className="text-[10px] lg:text-xs font-semibold text-[#94A3B8] font-sans">km</span>
+              </div>
+            </div>
+
+            {/* 2. Duration / Break Countdown */}
+            <div className="bg-slate-900/90 p-1.5 sm:p-2.5 lg:p-3 rounded-xl lg:rounded-2xl border border-slate-800">
+              <span className="text-[9px] sm:text-[10px] lg:text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748B] block mb-0.5 lg:mb-1">
+                {isBreak ? 'Break Left' : 'Time'}
+              </span>
+              <div
+                className={`text-lg sm:text-2xl lg:text-4xl font-display font-bold tabular-nums tracking-tight flex items-center justify-center h-full pb-0.5 lg:pb-1 ${
+                  isBreak ? 'text-amber-400 animate-pulse' : 'text-[#A3E635]'
+                }`}
+              >
+                {isBreak ? formatSeconds(tracker.breakRemainingSeconds) : activeDurationFormatted}
+              </div>
+            </div>
+
+            {/* 3. Pace (Aligned plain text empty state) */}
+            <div className="bg-slate-900/90 p-1.5 sm:p-2.5 lg:p-3 rounded-xl lg:rounded-2xl border border-slate-800">
+              <span className="text-[9px] sm:text-[10px] lg:text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748B] block mb-0.5 lg:mb-1">
+                Pace
+              </span>
+              <div className="flex items-baseline justify-center gap-0.5 lg:gap-1">
+                {paceFormatted ? (
+                  <>
+                    <span className="text-lg sm:text-2xl lg:text-4xl font-display font-bold tabular-nums tracking-tight text-white">
+                      {paceFormatted}
+                    </span>
+                    <span className="text-[9px] lg:text-[10px] font-semibold text-[#94A3B8] font-sans">min/km</span>
+                  </>
+                ) : (
+                  <span className="text-lg sm:text-2xl lg:text-4xl font-display font-bold tabular-nums tracking-tight text-[#64748B]">
+                    -- : --
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary Stats Chip Row (Hexes Claimed, Burned, Speed) - Hidden strictly on Mobile, shown on Laptop */}
+          <div className="hidden lg:flex flex-wrap items-center justify-between gap-2 pt-0.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Hex Claimed Chip */}
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-sans font-semibold border transition-colors ${
+                  hexesClaimed > 0
+                    ? 'bg-slate-800 text-[#A3E635] border-lime-400/40'
+                    : 'bg-slate-900 text-slate-400 border-slate-800'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>+{hexesClaimed} hexes claimed</span>
+              </span>
+
+              {tracker.loopsDetectedCount > 0 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800 text-xs font-sans font-semibold">
+                  <Shield className="w-3 h-3" />
+                  <span>{tracker.loopsDetectedCount} loop enclosed</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-sans text-slate-400 font-medium">
+              <span className="bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
+                🔥 <strong className="text-slate-200">{metrics.caloriesBurned || 0} kcal</strong>
+              </span>
+              <span className="bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
+                ⚡ <strong className="text-slate-200">{metrics.avgSpeedKmh || 0} km/h</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Primary Action Button (Compact on mobile, 56px Full-Width CTA on laptop) */}
+          <div className="pt-0.5 lg:pt-1">
+            {!isTracking && !isBreak ? (
+              <button
+                type="button"
+                onClick={handleStartClick}
+                className="w-full h-10 sm:h-12 lg:h-14 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold text-sm lg:text-base rounded-xl lg:rounded-2xl shadow-md transition-all active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5 lg:gap-2"
+              >
+                <Play className="w-4 h-4 lg:w-5 lg:h-5 fill-white" />
+                <span>Start Run</span>
+                {trackingEngine === 'simulated' && (
+                  <span className="text-[11px] lg:text-xs font-normal text-purple-200 font-sans">(Test mode)</span>
+                )}
+              </button>
+            ) : (
+              <div className="flex items-center justify-center gap-3 lg:gap-5">
+                {/* Pause/Resume Button */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setTrackingEngine('simulated');
-                    if (tracker.setSimulated) tracker.setSimulated(true);
-                    const circuit = DEMO_CIRCUITS[selectedCircuit] || DEMO_CIRCUITS.cubbon_park;
-                    if (onLocationUpdate && circuit.coords[0]) {
-                      onLocationUpdate({
-                        latitude: circuit.coords[0][1],
-                        longitude: circuit.coords[0][0],
-                        accuracy: 6,
-                        timestamp: Date.now(),
-                        isSimulated: true,
-                        forceFly: true,
-                      });
-                    }
-                  }}
-                  className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
-                    trackingEngine === 'simulated'
-                      ? 'bg-slate-900 text-white font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
+                  onClick={isBreak ? handleResumeClick : tracker.pauseTracking}
+                  className={`w-11 h-11 lg:w-[72px] lg:h-[72px] rounded-full text-white shadow-lg border-2 border-white flex items-center justify-center transition-transform active:scale-95 cursor-pointer ${
+                    isBreak
+                      ? 'bg-emerald-600 hover:bg-emerald-500 animate-pulse ring-4 ring-emerald-500/30'
+                      : 'bg-[#7C3AED] hover:bg-[#6D28D9]'
                   }`}
+                  title={isBreak ? 'Resume Run' : 'Pause Run'}
+                  aria-label={isBreak ? 'Resume Run' : 'Pause Run'}
                 >
-                  <Cpu className="w-3 h-3 inline mr-1" />
-                  Sim
+                  {isBreak ? (
+                    <Play className="w-5 h-5 lg:w-7 lg:h-7 fill-white translate-x-0.5" />
+                  ) : (
+                    <Pause className="w-5 h-5 lg:w-7 lg:h-7 fill-white" />
+                  )}
                 </button>
+
+                {/* Hold-to-Confirm Stop Button (1.2s Ring Progress Fill) */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onMouseDown={startStopHold}
+                    onMouseUp={cancelStopHold}
+                    onMouseLeave={cancelStopHold}
+                    onTouchStart={startStopHold}
+                    onTouchEnd={cancelStopHold}
+                    className="h-11 sm:h-12 lg:h-14 px-4 lg:px-6 rounded-xl lg:rounded-2xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-800 text-[11px] lg:text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer flex items-center gap-1.5 lg:gap-2 relative overflow-hidden"
+                  >
+                    <Square className="w-3.5 h-3.5 lg:w-4 lg:h-4 fill-current" />
+                    <span>Hold 1.2s to Finish</span>
+                    {/* Ring Progress Fill */}
+                    <div
+                      className="absolute inset-y-0 left-0 bg-rose-600/40 transition-all duration-75 pointer-events-none"
+                      style={{ width: `${stopProgress}%` }}
+                    />
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
-
-        {/* Break Warning / Cooldown Error Toast */}
-        {tracker.breakWarningMessage && (
-          <div className="flex items-center gap-2 p-3 mb-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-700 animate-in fade-in">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{tracker.breakWarningMessage}</span>
-          </div>
-        )}
-
-        {/* PROMINENT BREAK NOTIFICATION */}
-        {isBreak && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-3 space-y-2.5 animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-amber-700">
-                <Coffee className="w-5 h-5 text-amber-600" />
-                <span className="text-sm font-black uppercase tracking-wider">BREAK</span>
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-mono font-black text-sm">
-                <Clock className="w-4 h-4 text-amber-600" />
-                <span>{breakCountdownFormatted}</span>
-              </div>
-            </div>
-
-            <div className="text-xs text-slate-700 font-medium">
-              <p className="font-bold text-amber-800">You're taking a break.</p>
-              <p className="text-slate-600 text-[11px] mt-0.5">
-                Continue within <span className="text-amber-700 font-mono font-bold">{breakCountdownFormatted}</span> to keep your activity active.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 border-t border-amber-200 text-[11px] text-slate-500">
-              <span>Current Distance: <strong className="text-slate-900 font-mono">{distanceKm} km</strong></span>
-              <span>Current Area: <strong className="text-purple-700 font-mono">{areaDisplay.val} {areaDisplay.unit}</strong></span>
-            </div>
-          </div>
-        )}
-
-        {/* Geometry Engine Diagnostic Debug Panel */}
-        {isDebugOpen && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 text-xs space-y-2 animate-in fade-in">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
-              <span className="font-bold text-purple-700 flex items-center gap-1.5">
-                <Bug className="w-3.5 h-3.5" />
-                Geometry Engine Diagnostics
-              </span>
-              <span
-                className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  metrics.geometryStatus === 'VALID'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                    : 'bg-slate-200 text-slate-700 border-slate-300'
-                }`}
-              >
-                {metrics.geometryStatus || 'IDLE'}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
-              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
-                <div className="text-slate-500 text-[10px]">Route Points</div>
-                <div className="text-slate-900 font-bold">{tracker.gpsPoints.length}</div>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
-                <div className="text-slate-500 text-[10px]">Intersections</div>
-                <div className="text-purple-700 font-bold">{metrics.intersectionsCount || 0}</div>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
-                <div className="text-slate-500 text-[10px]">Closed Loops</div>
-                <div className="text-slate-900 font-bold">{metrics.loopsCount || 0}</div>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
-                <div className="text-slate-500 text-[10px]">Enclosed Hexes</div>
-                <div className="text-purple-700 font-bold">{metrics.interiorCellsCount || 0}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Simulation Circuit & Speed Selector */}
-        {trackingEngine === 'simulated' && !isTracking && !isBreak && (
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 mb-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-800 font-bold">Circuit:</span>
-              <select
-                value={selectedCircuit}
-                onChange={(e) => {
-                  const key = e.target.value;
-                  setSelectedCircuit(key);
-                  if (tracker.setSimulated) tracker.setSimulated(true);
-                  const circuit = DEMO_CIRCUITS[key];
-                  if (circuit && onLocationUpdate && circuit.coords[0]) {
-                    onLocationUpdate({
-                      latitude: circuit.coords[0][1],
-                      longitude: circuit.coords[0][0],
-                      accuracy: 6,
-                      timestamp: Date.now(),
-                      isSimulated: true,
-                      forceFly: true,
-                    });
-                  }
-                }}
-                className="bg-white text-slate-800 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-purple-600 font-medium"
-              >
-                <option value="curve">Curved Loop (~40m, Enclosed Area)</option>
-                <option value="straight_line">Straight Line Sprint (~150m, Corridor)</option>
-                <option value="zigzag">Zig-Zag Route (~160m, Agility Cuts)</option>
-                <option value="zigzag_loop">Zig-Zag Enclosed Circuit (~180m)</option>
-                <option value="cubbon_park">Cubbon Park Loop, Bengaluru (~1.2km)</option>
-                <option value="central_park">Central Park Reservoir, NYC (~2.5km)</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 text-[11px]">Speed:</span>
-              {[1, 2, 4].map((spd) => (
-                <button
-                  key={spd}
-                  type="button"
-                  onClick={() => setSimulationSpeed(spd)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
-                    simulationSpeed === spd
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                  }`}
-                >
-                  {spd}x
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 5-Stat Tactical Live Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5 mb-4">
-          <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-1.5 text-slate-500 text-xs mb-1">
-              <MapPin className="w-3.5 h-3.5 text-purple-600" />
-              <span className="uppercase text-[10px] font-bold tracking-wider">Distance</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-purple-700">
-              {distanceKm}
-              <span className="text-xs font-sans font-normal text-slate-500 ml-1">km</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-1.5 text-slate-500 text-xs mb-1">
-              <Timer className="w-3.5 h-3.5 text-slate-600" />
-              <span className="uppercase text-[10px] font-bold tracking-wider">Active Time</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-slate-900">
-              {activeDurationFormatted}
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-1.5 text-slate-500 text-xs mb-1">
-              <Gauge className="w-3.5 h-3.5 text-slate-600" />
-              <span className="uppercase text-[10px] font-bold tracking-wider">Avg Pace</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-slate-900">
-              {paceFormatted}
-              <span className="text-xs font-sans font-normal text-slate-500 ml-1">min/km</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-1.5 text-slate-500 text-xs mb-1">
-              <Shield className="w-3.5 h-3.5 text-purple-600" />
-              <span className="uppercase text-[10px] font-bold tracking-wider">Captured Area</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-purple-700">
-              {areaDisplay.val}
-              <span className="text-xs font-sans font-normal text-slate-500 ml-1">{areaDisplay.unit}</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
-            <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                <span className="uppercase text-[10px] font-bold tracking-wider">Hexes</span>
-              </span>
-              {tracker.loopsDetectedCount > 0 && (
-                <span className="text-[10px] font-mono font-black text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded border border-purple-200">
-                  {tracker.loopsDetectedCount} loop{tracker.loopsDetectedCount > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-slate-900">
-              {tracker.capturedHexes?.size || 0}
-              <span className="text-xs font-sans font-normal text-slate-500 ml-1">cells</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Control Buttons */}
-        <div className="flex items-center gap-3">
-          {!isTracking && !isBreak ? (
-            <button
-              type="button"
-              onClick={handleStartClick}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 px-6 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-md shadow-purple-600/20 transition-colors cursor-pointer"
-            >
-              <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white text-white" />
-              Start {activityType === 'RUN' ? 'Outdoor Run' : 'Outdoor Walk'} & Claim Territory
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={isBreak ? handleResumeClick : tracker.pauseTracking}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 px-4 font-bold text-xs uppercase tracking-wider rounded-xl border transition-colors cursor-pointer ${
-                  isBreak
-                    ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600 shadow-md'
-                    : 'bg-[#0F172A] hover:bg-[#1E293B] text-white border border-[#0F172A]'
-                }`}
-              >
-                {isBreak ? <Play className="w-4 h-4 fill-white" /> : <Coffee className="w-4 h-4 text-white" />}
-                {isBreak ? 'Resume Activity' : 'Take Break (5m)'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => tracker.stopTracking({ reason: 'USER_STOPPED' })}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-900 hover:bg-black text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-colors cursor-pointer"
-              >
-                <Square className="w-4 h-4 fill-white" />
-                Finish & Claim Territory
-              </button>
-            </>
-          )}
-        </div>
       </div>
+    </div>
 
       <LocationPermissionModal
         isOpen={isPermissionModalOpen}

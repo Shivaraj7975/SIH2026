@@ -7,6 +7,11 @@ import StatCard from '../components/ui/StatCard.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import Button from '../components/ui/Button.jsx';
 import ProgressBar from '../components/ui/ProgressBar.jsx';
+import ChallengeCard from '../components/ui/ChallengeCard.jsx';
+import WorkoutDetailModal from '../components/workout/WorkoutDetailModal.jsx';
+import PrivacySettingsModal from '../components/privacy/PrivacySettingsModal.jsx';
+import LoadingState from '../components/ui/LoadingState.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import {
   Award,
   Flame,
@@ -20,10 +25,15 @@ import {
   Calendar,
   Sparkles,
   TrendingUp,
-  Hexagon,
   Target,
+  Activity,
+  History,
+  ChevronRight,
+  RefreshCw,
+  Zap,
+  Radio,
+  User,
 } from 'lucide-react';
-import PrivacySettingsModal from '../components/privacy/PrivacySettingsModal.jsx';
 import { api } from '../lib/api.js';
 
 const AVATAR_OPTIONS = ['⚡', '🔥', '🌿', '👾', '🚀', '🐺', '🐯', '💎', '🎯', '🦅'];
@@ -31,45 +41,72 @@ const AVATAR_OPTIONS = ['⚡', '🔥', '🌿', '👾', '🚀', '🐺', '🐯', '
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+
+  // Active top-level tab: 'profile' | 'workouts' | 'objectives'
+  const [activeTab, setActiveTab] = useState('profile');
+
+  // Profile / Gamification Data
   const [gamificationStats, setGamificationStats] = useState(null);
   const [weeklySummary, setWeeklySummary] = useState(null);
   const [monthlySummary, setMonthlySummary] = useState(null);
   const [achievementsData, setAchievementsData] = useState(null);
-  const [selectedSummaryTab, setSelectedSummaryTab] = useState('weekly'); // 'weekly' | 'monthly'
-  const [loading, setLoading] = useState(true);
+  const [selectedSummaryTab, setSelectedSummaryTab] = useState('weekly');
 
-  // Edit Avatar State
+  // Workouts / Activities Data
+  const [activities, setActivities] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  // Daily Objectives / Challenges Data
+  const [challengeData, setChallengeData] = useState(null);
+  const [challengeHistory, setChallengeHistory] = useState([]);
+  const [challengeTab, setChallengeTab] = useState('today'); // 'today' | 'history'
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
+  // Edit Profile State
   const [isEditing, setIsEditing] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [avatar, setAvatar] = useState('⚡');
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user?.id) {
-      setDisplayName(user.displayName);
+      setDisplayName(user.displayName || user.username);
       setAvatar(user.avatar || '⚡');
-      loadAllProfileData();
+      loadAllAthleteData();
     }
   }, [user?.id]);
 
-  const loadAllProfileData = async () => {
+  const loadAllAthleteData = async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const [statsRes, weeklyRes, monthlyRes, achRes] = await Promise.all([
-        api.getGamificationStats(user.id),
-        api.getWeeklySummary(user.id),
-        api.getMonthlySummary(user.id),
-        api.getAchievements(user.id),
+      const [statsRes, weeklyRes, monthlyRes, achRes, actRes, chalRes, chalHistRes] = await Promise.all([
+        api.getGamificationStats(user.id).catch(() => ({ success: false })),
+        api.getWeeklySummary(user.id).catch(() => ({ success: false })),
+        api.getMonthlySummary(user.id).catch(() => ({ success: false })),
+        api.getAchievements(user.id).catch(() => ({ success: false })),
+        api.getActivities(user.id).catch(() => ({ success: false })),
+        api.getChallenges(user.id).catch(() => ({ success: false })),
+        api.get(`/challenges/history?userId=${user.id}`).catch(() => ({ success: false })),
       ]);
 
       if (statsRes.success) setGamificationStats(statsRes.data);
       if (weeklyRes.success) setWeeklySummary(weeklyRes.data);
       if (monthlyRes.success) setMonthlySummary(monthlyRes.data);
       if (achRes.success) setAchievementsData(achRes.data);
+
+      if (actRes.success) {
+        const list = actRes.activities || actRes.data?.recentActivities || actRes.data || [];
+        setActivities(list);
+      }
+
+      if (chalRes.success) setChallengeData(chalRes.data);
+      if (chalHistRes.success) setChallengeHistory(chalHistRes.data || []);
     } catch (err) {
-      console.error('Error loading gamification profile data:', err);
+      console.error('Error loading athlete profile data:', err);
     } finally {
       setLoading(false);
     }
@@ -92,369 +129,446 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRecalculateChallenge = async () => {
+    setIsRecalculating(true);
+    try {
+      const res = await api.post('/challenges/recalculate', { userId: user.id });
+      if (res.success) {
+        toast.success('Challenge progress synced from valid workouts!');
+        const chalRes = await api.getChallenges(user.id);
+        if (chalRes.success) setChallengeData(chalRes.data);
+      }
+    } catch (e) {
+      toast.error('Recalculation failed');
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   const streak = gamificationStats?.streak || 0;
   const longestStreak = gamificationStats?.longestStreak || streak;
   const currentTerritory = gamificationStats?.currentTerritory || user?.currentTerritoryCount || 0;
-  const totalDistanceKm = gamificationStats?.totalDistanceKm || 0;
-  const totalAreaCovered = gamificationStats?.totalAreaCovered || 0;
-  const uniqueCells = gamificationStats?.uniqueCells || 0;
-  const activityCount = gamificationStats?.activities || 0;
+  const totalDistanceKm = gamificationStats?.totalDistanceKm || (activities.reduce((sum, a) => sum + (Number(a.distance) || 0), 0) / 1000).toFixed(1);
+  const totalCalories = gamificationStats?.totalCalories || activities.reduce((sum, a) => sum + (Number(a.calories) || 0), 0);
+  const totalDurationSecs = activities.reduce((sum, a) => sum + (Number(a.duration) || 0), 0);
 
-  // Merge definitions with user unlocked state
-  const allDefinitions = achievementsData?.definitions || [];
-  const unlockedMap = new Map((achievementsData?.unlocked || []).map((a) => [a.type, a]));
+  const challenge = challengeData?.challenge;
+  const challengeProgress = challengeData?.progress;
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-5xl mx-auto">
-        {/* Player Identity Card */}
-        <Card variant="glass" className="p-6 border-slate-200 bg-white shadow-sm font-sans">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
-              <Avatar avatar={avatar} color="#7C3AED" size="xl" />
+      <div className="space-y-6 max-w-6xl mx-auto pb-10 font-sans">
+        {/* Top Hub Navigation Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-all cursor-pointer ${
+                activeTab === 'profile'
+                  ? 'bg-purple-600 text-white font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>Athlete Profile</span>
+            </button>
 
-              <div className="space-y-1">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <h1 className="text-2xl font-black text-slate-900">{displayName || user?.displayName}</h1>
-                  <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200 w-fit mx-auto sm:mx-0">
-                    Tactical Runner
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 font-mono">@{user?.username}</p>
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1 text-xs text-slate-500">
-                  <span className="flex items-center gap-1 font-mono text-slate-800 font-bold bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                    <Flame className="w-3.5 h-3.5 text-orange-600 fill-orange-600" />
-                    <span>{streak} Day Streak</span>
-                  </span>
-                  <span className="text-slate-400">•</span>
-                  <span>Longest: <span className="font-mono font-bold text-slate-900">{longestStreak} Days</span></span>
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('workouts')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-all cursor-pointer ${
+                activeTab === 'workouts'
+                  ? 'bg-purple-600 text-white font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              <span>Workouts &amp; Logs ({activities.length})</span>
+            </button>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                icon={Shield}
-                onClick={() => setIsPrivacyModalOpen(true)}
-              >
-                Privacy & Safe Zones
-              </Button>
-
-              <Button
-                variant={isEditing ? 'secondary' : 'outline'}
-                size="sm"
-                icon={Edit3}
-                onClick={() => setIsEditing(!isEditing)}
-              >
-                {isEditing ? 'Cancel' : 'Edit Avatar'}
-              </Button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('objectives')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-all cursor-pointer ${
+                activeTab === 'objectives'
+                  ? 'bg-purple-600 text-white font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+              }`}
+            >
+              <Target className="w-4 h-4 text-amber-500" />
+              <span>Daily Objectives</span>
+            </button>
           </div>
 
-          {/* Edit Profile Form */}
-          {isEditing && (
-            <div className="mt-6 pt-5 border-t border-slate-100 space-y-4 animate-in fade-in duration-200">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Select Avatar</label>
-                <div className="flex flex-wrap gap-2">
-                  {AVATAR_OPTIONS.map((em) => (
-                    <button
-                      key={em}
-                      type="button"
-                      onClick={() => setAvatar(em)}
-                      className={`w-9 h-9 text-lg rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                        avatar === em
-                          ? 'bg-purple-50 border-2 border-purple-600 scale-105 shadow-xs'
-                          : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {em}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="purple" size="sm" onClick={handleSaveProfile} isLoading={saving}>
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* 4 Quick Motivation Chips */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6 pt-5 border-t border-slate-100 text-center">
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                <Flame className="w-3.5 h-3.5 text-orange-600" />
-                <span>Active Streak</span>
-              </div>
-              <div className="text-lg sm:text-xl font-black font-mono text-slate-900 mt-1">
-                {streak} Days 🔥
-              </div>
-            </div>
-
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                <Shield className="w-3.5 h-3.5 text-purple-600" />
-                <span>Dominion</span>
-              </div>
-              <div className="text-lg sm:text-xl font-black font-mono text-purple-700 mt-1">
-                {currentTerritory} hexes
-              </div>
-            </div>
-
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                <Crown className="w-3.5 h-3.5 text-slate-700" />
-                <span>Weekly Rank</span>
-              </div>
-              <div className="text-lg sm:text-xl font-black font-mono text-slate-900 mt-1">
-                #{weeklySummary?.rank || user?.weeklyRank || 1}
-              </div>
-            </div>
-
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
-                <span>Distance</span>
-              </div>
-              <div className="text-lg sm:text-xl font-black font-mono text-purple-700 mt-1">
-                {Number(totalDistanceKm).toFixed(1)} km
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Lifetime Personal Statistics */}
-        <div>
-          <h2 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-600" />
-            <span>Lifetime Personal Telemetry</span>
-          </h2>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard
-              title="Total Distance"
-              value={totalDistanceKm}
-              unit="km"
-              icon={MapPin}
-              color="purple"
-            />
-
-            <StatCard
-              title="Historical Area"
-              value={totalAreaCovered}
-              unit="km²"
-              icon={Hexagon}
-              color="darkblue"
-            />
-
-            <StatCard
-              title="Unique Hexes"
-              value={uniqueCells}
-              unit="cells"
-              icon={Shield}
-              color="purple"
-            />
-
-            <StatCard
-              title="Total Workouts"
-              value={activityCount}
-              unit="sessions"
-              icon={CheckCircle2}
-              color="darkblue"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsPrivacyModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 hover:text-purple-600 bg-slate-50 hover:bg-purple-50 border border-slate-200 rounded-xl transition-colors cursor-pointer"
+          >
+            <Shield className="w-3.5 h-3.5 text-purple-600" />
+            <span>Data Privacy &amp; GPX Export</span>
+          </button>
         </div>
 
-        {/* Weekly vs Monthly Summary Switcher */}
-        <Card variant="glass" className="border-slate-200 bg-white shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100">
-            <CardTitle className="text-slate-900 font-bold">
-              <Calendar className="w-5 h-5 text-purple-600" />
-              <span>Training Summary</span>
-            </CardTitle>
-            <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setSelectedSummaryTab('weekly')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  selectedSummaryTab === 'weekly'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Weekly Report
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedSummaryTab('monthly')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  selectedSummaryTab === 'monthly'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Monthly Report
-              </button>
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            {selectedSummaryTab === 'weekly' && weeklySummary && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between text-xs text-slate-500 border-b border-slate-100 pb-2">
-                  <span>Period: <strong className="text-slate-900">{weeklySummary.period}</strong></span>
-                  <span>Active Days: <strong className="text-purple-700">{weeklySummary.activeDaysCount} / 7 days</strong></span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Distance</span>
-                    <div className="text-base font-black font-mono text-purple-700 mt-0.5">{weeklySummary.totalDistanceKm} km</div>
+        {/* TAB 1: ATHLETE PROFILE & DOMINION */}
+        {activeTab === 'profile' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Athlete Header Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <span className="flex items-center justify-center w-20 h-20 rounded-3xl bg-purple-100 border-2 border-purple-300 text-4xl shadow-md">
+                      {avatar}
+                    </span>
+                    <span className="absolute -bottom-1 -right-1 bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white shadow-xs">
+                      Lv.{user?.level || 1}
+                    </span>
                   </div>
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Active Time</span>
-                    <div className="text-base font-black font-mono text-slate-900 mt-0.5">{weeklySummary.totalDurationMinutes} mins</div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Comp Score</span>
-                    <div className="text-base font-black font-mono text-purple-700 mt-0.5">{weeklySummary.competitionScore} pts</div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Standing</span>
-                    <div className="text-base font-black font-mono text-slate-900 mt-0.5">#{weeklySummary.rank}</div>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {selectedSummaryTab === 'monthly' && monthlySummary && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between text-xs text-slate-500 border-b border-slate-100 pb-2">
-                  <span>Period: <strong className="text-slate-900">{monthlySummary.period}</strong></span>
-                  <span>Standing: <strong className="text-purple-700">#{monthlySummary.rank}</strong></span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Total Distance</span>
-                    <div className="text-base font-black font-mono text-purple-700 mt-0.5">{monthlySummary.totalDistanceKm} km</div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Workouts</span>
-                    <div className="text-base font-black font-mono text-slate-900 mt-0.5">{monthlySummary.activityCount} runs</div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Monthly Score</span>
-                    <div className="text-base font-black font-mono text-purple-700 mt-0.5">{monthlySummary.competitionScore} pts</div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] uppercase text-slate-500 font-mono">Monthly Rank</span>
-                    <div className="text-base font-black font-mono text-slate-900 mt-0.5">#{monthlySummary.rank}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Achievement Showcase */}
-        <Card variant="glass" className="border-slate-200 bg-white shadow-sm">
-          <CardHeader className="border-b border-slate-100">
-            <CardTitle className="text-slate-900 font-bold">
-              <Award className="w-5 h-5 text-purple-600" />
-              <span>Conquest Achievements</span>
-            </CardTitle>
-            <span className="text-xs text-slate-500 font-mono">
-              {gamificationStats?.unlockedAchievementsCount || 0} / {allDefinitions.length || 9} Unlocked
-            </span>
-          </CardHeader>
-
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {allDefinitions.map((def) => {
-                const isUnlocked = unlockedMap.has(def.type);
-
-                return (
-                  <div
-                    key={def.type}
-                    className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                      isUnlocked
-                        ? 'bg-purple-50/40 border-purple-200 shadow-xs'
-                        : 'bg-slate-50 border-slate-200 opacity-60'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 border ${
-                        isUnlocked ? 'bg-white border-purple-200 text-purple-700' : 'bg-slate-100 border-slate-200 grayscale'
-                      }`}>
-                        {def.icon}
-                      </div>
-
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-black text-slate-900">{def.title}</h4>
-                          {isUnlocked ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
-                          ) : (
-                            <Lock className="w-3 h-3 text-slate-400" />
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-500 leading-snug">{def.description}</p>
-                      </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                        {user?.displayName || user?.username}
+                      </h1>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                        {user?.team || 'Team Alpha'}
+                      </span>
                     </div>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                      @{user?.username} • Rank #{user?.weeklyRank || 1} in City Standing
+                    </p>
 
-                    <div className="flex items-center justify-between text-[10px] font-mono pt-2 border-t border-slate-200/60">
-                      <span className="text-purple-700 font-bold">+{def.xpReward} XP</span>
-                      <span className={isUnlocked ? 'text-purple-700 font-bold' : 'text-slate-400'}>
-                        {isUnlocked ? 'UNLOCKED' : 'LOCKED'}
+                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-600 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Flame className="w-3.5 h-3.5 text-orange-500" />
+                        <strong className="text-slate-900">{streak} Day Streak</strong> (Best: {longestStreak}d)
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Shield className="w-3.5 h-3.5 text-purple-600" />
+                        <strong className="text-purple-700 font-mono">{currentTerritory}</strong> Hexagon Dominion
                       </span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
 
-        {/* Milestone Notifications & Progress */}
-        {gamificationStats?.milestones && (
-          <Card variant="glass" className="border-slate-200 bg-white shadow-sm">
-            <CardHeader className="border-b border-slate-100">
-              <CardTitle className="text-slate-900 font-bold">
-                <Target className="w-5 h-5 text-purple-600" />
-                <span>Endurance Milestones</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {gamificationStats.milestones.map((m, idx) => (
-                  <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-900">{m.name}</span>
-                      <span className="font-mono text-purple-700">{m.current} / {m.target} {m.unit}</span>
-                    </div>
-                    <ProgressBar
-                      value={m.current}
-                      max={m.target}
-                      variant={m.reached ? 'emerald' : 'purple'}
-                      showLabel={false}
-                    />
-                  </div>
-                ))}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(!isEditing)}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{isEditing ? 'Cancel Edit' : 'Edit Avatar & Bio'}</span>
+                  </button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+
+              {/* Edit Avatar Selector */}
+              {isEditing && (
+                <div className="mt-6 pt-5 border-t border-slate-100 space-y-4 animate-in fade-in duration-150">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase">Choose Avatar Symbol:</label>
+                    <div className="flex flex-wrap gap-2">
+                      {AVATAR_OPTIONS.map((av) => (
+                        <button
+                          key={av}
+                          type="button"
+                          onClick={() => setAvatar(av)}
+                          className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all cursor-pointer border ${
+                            avatar === av
+                              ? 'bg-purple-600 text-white border-purple-600 scale-110 shadow-sm'
+                              : 'bg-slate-100 hover:bg-slate-200 border-slate-200'
+                          }`}
+                        >
+                          {av}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Display Name"
+                      className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveProfile}
+                      disabled={saving}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      {saving ? 'Saving...' : 'Save Profile'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 4 Primary Lifetime Fitness StatCards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <StatCard
+                title="Total Distance"
+                value={totalDistanceKm}
+                unit="km"
+                icon={MapPin}
+                color="purple"
+              />
+              <StatCard
+                title="Territory Dominion"
+                value={currentTerritory}
+                unit="hexes"
+                icon={Shield}
+                color="darkblue"
+              />
+              <StatCard
+                title="Active Time"
+                value={Math.round(totalDurationSecs / 60)}
+                unit="mins"
+                icon={Clock}
+                color="purple"
+              />
+              <StatCard
+                title="Calories Burned"
+                value={totalCalories}
+                unit="kcal"
+                icon={Flame}
+                color="darkblue"
+              />
+            </div>
+
+            {/* Weekly & Monthly Performance Summaries */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card variant="glass" className="p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-black text-sm text-slate-900 uppercase tracking-wider">
+                      Weekly Performance Report
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                    7-DAY AGGREGATE
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 font-mono text-center">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block uppercase">Distance</span>
+                    <span className="text-base font-black text-purple-700">{weeklySummary?.totalDistanceKm || '0.0'} km</span>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block uppercase">Workouts</span>
+                    <span className="text-base font-black text-slate-900">{weeklySummary?.workoutCount || 0}</span>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block uppercase">Hexes Visited</span>
+                    <span className="text-base font-black text-purple-700">{weeklySummary?.uniqueCells || 0}</span>
+                  </div>
+                </div>
+              </Card>
+
+              <Card variant="glass" className="p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-black text-sm text-slate-900 uppercase tracking-wider">
+                      Monthly Endurance Summary
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                    30-DAY WINDOW
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 font-mono text-center">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block uppercase">Distance</span>
+                    <span className="text-base font-black text-purple-700">{monthlySummary?.totalDistanceKm || '0.0'} km</span>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block uppercase">Workouts</span>
+                    <span className="text-base font-black text-slate-900">{monthlySummary?.workoutCount || 0}</span>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block uppercase">Hexes Conquered</span>
+                    <span className="text-base font-black text-purple-700">{monthlySummary?.uniqueCells || 0}</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
         )}
 
+        {/* TAB 2: WORKOUT & ACTIVITY HISTORY */}
+        {activeTab === 'workouts' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-purple-600" />
+                  <span>Permanent Workout Records</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Click any workout session to inspect its GPS route path and conquered territory on the tactical map.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1 bg-purple-100 text-purple-700 rounded-full border border-purple-200">
+                {activities.length} Recorded Sessions
+              </span>
+            </div>
+
+            {activities.length === 0 ? (
+              <EmptyState
+                icon={Activity}
+                title="No workouts recorded yet"
+                description="Start a test run or real GPS run on the Tactical Map to log your first exercise conquest!"
+              />
+            ) : (
+              <div className="space-y-3">
+                {activities.map((act) => {
+                  const distKm = ((Number(act.distance) || 0) / 1000).toFixed(2);
+                  const durMin = Math.round((Number(act.duration) || 0) / 60);
+                  const dateStr = new Date(act.start_time || act.createdAt || Date.now()).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+
+                  return (
+                    <div
+                      key={act.id}
+                      onClick={() => {
+                        setSelectedActivity(act);
+                        setIsDetailModalOpen(true);
+                      }}
+                      className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-purple-400 hover:shadow-md transition-all cursor-pointer flex flex-wrap items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-black">
+                          {act.activity_type === 'WALK' ? '🚶' : '🏃'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-slate-900">
+                              {act.title || (act.activity_type === 'WALK' ? 'Outdoor Walk' : 'Outdoor Run')}
+                            </h4>
+                            <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md border border-slate-200">
+                              {dateStr}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-mono">
+                            <span>{distKm} km</span>
+                            <span>•</span>
+                            <span>{durMin} mins</span>
+                            <span>•</span>
+                            <span>{act.calories || Math.round(Number(act.distance || 0) * 0.065)} kcal</span>
+                            <span>•</span>
+                            <span className="text-purple-700 font-bold">{act.hex_count || act.uniqueCellsCount || 1} hexes</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-purple-600 hover:underline">View Map &amp; Details</span>
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: DAILY OBJECTIVES & UNIVERSAL CHALLENGES */}
+        {activeTab === 'objectives' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Objectives Header & Sync */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <Target className="w-5 h-5 text-amber-500" />
+                  <span>Universal 24-Hour Daily Challenges</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Standardized daily objectives reset every 24 hours. Complete the distance/sector target to earn bonus XP!
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRecalculateChallenge}
+                  disabled={isRecalculating}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                  <span>Sync Workout Progress</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Active Challenge Card */}
+            {challenge ? (
+              <ChallengeCard
+                challenge={challenge}
+                progress={challengeProgress}
+              />
+            ) : (
+              <Card variant="glass" className="p-6 text-center space-y-2">
+                <Target className="w-8 h-8 text-amber-500 mx-auto animate-pulse" />
+                <h3 className="font-bold text-slate-900">Generating Today's Universal Challenge...</h3>
+                <p className="text-xs text-slate-500">Run any route on the live map to begin making progress!</p>
+              </Card>
+            )}
+
+            {/* Challenge Archive / History */}
+            {challengeHistory.length > 0 && (
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <History className="w-4 h-4 text-purple-600" />
+                  <span>Past Challenge Archive</span>
+                </h3>
+                <div className="space-y-2">
+                  {challengeHistory.map((item) => (
+                    <div key={item.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900">{item.title || 'Daily Objective'}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">{item.challenge_date} • Target: {item.target_value}</div>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                        item.completed ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {item.completed ? 'COMPLETED ✓' : 'EXPIRED'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Workout Detail Modal */}
+        <WorkoutDetailModal
+          isOpen={isDetailModalOpen}
+          onClose={() => {
+            setIsDetailModalOpen(false);
+            setSelectedActivity(null);
+          }}
+          activity={selectedActivity}
+        />
+
+        {/* Privacy Settings Modal */}
         <PrivacySettingsModal
           isOpen={isPrivacyModalOpen}
           onClose={() => setIsPrivacyModalOpen(false)}
-          activeUserId={user?.id}
+          userId={user?.id}
         />
       </div>
     </AppShell>

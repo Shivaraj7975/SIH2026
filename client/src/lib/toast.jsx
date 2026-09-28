@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { Sparkles, CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertTriangle, XCircle, Info, X, Zap } from 'lucide-react';
 
 const ToastContext = createContext(null);
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((toastOrMessage, type = 'info', duration = 4000) => {
+  const addToast = useCallback((toastOrMessage, type = 'info', duration = 5000) => {
     let newToast;
     if (typeof toastOrMessage === 'object' && toastOrMessage !== null) {
       newToast = {
@@ -15,6 +15,9 @@ export function ToastProvider({ children }) {
         type: toastOrMessage.type || 'info',
         title: toastOrMessage.title || '',
         message: toastOrMessage.message || '',
+        actionLabel: toastOrMessage.actionLabel,
+        onAction: toastOrMessage.onAction,
+        colorDot: toastOrMessage.colorDot,
       };
     } else {
       newToast = {
@@ -53,8 +56,8 @@ export function ToastProvider({ children }) {
     addToast({ message, title, type: 'info' });
   }, [addToast]);
 
-  const conquest = useCallback((message, title = '') => {
-    addToast({ message, title, type: 'conquest' });
+  const conquest = useCallback((message, title = '', colorDot = '#7C3AED') => {
+    addToast({ message, title, type: 'conquest', colorDot });
   }, [addToast]);
 
   const contextValue = {
@@ -70,26 +73,58 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+      <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none font-sans">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto flex items-start gap-3 p-4 rounded-xl border bg-white shadow-xl text-slate-900 border-slate-200 transition-all duration-150"
+            className={`pointer-events-auto flex items-start gap-3 p-4 rounded-2xl border bg-white/95 backdrop-blur-md shadow-lg text-text-primary transition-all duration-200 animate-in slide-in-from-top-3 ${
+              toast.type === 'conquest' || toast.type === 'warning'
+                ? 'border-l-4 border-l-amber-500 border-border'
+                : toast.type === 'success'
+                ? 'border-l-4 border-l-accent-lime border-border'
+                : toast.type === 'error'
+                ? 'border-l-4 border-l-danger border-border'
+                : 'border-border'
+            }`}
           >
-            {toast.type === 'conquest' && <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />}
-            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />}
-            {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />}
-            {toast.type === 'error' && <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />}
-            {toast.type === 'info' && <Info className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />}
+            {toast.colorDot ? (
+              <span
+                className="w-3.5 h-3.5 rounded-full shrink-0 mt-0.5 border border-white shadow-xs"
+                style={{ backgroundColor: toast.colorDot }}
+              />
+            ) : (
+              <>
+                {toast.type === 'conquest' && <Sparkles className="w-5 h-5 text-brand shrink-0 mt-0.5" />}
+                {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />}
+                {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />}
+                {toast.type === 'error' && <XCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />}
+                {toast.type === 'info' && <Info className="w-5 h-5 text-brand shrink-0 mt-0.5" />}
+              </>
+            )}
 
-            <div className="flex-1 text-sm">
-              {toast.title && <div className="font-bold text-slate-900">{toast.title}</div>}
-              {toast.message && <div className="text-xs text-slate-600 mt-0.5 font-medium">{toast.message}</div>}
+            <div className="flex-1 text-xs">
+              {toast.title && <div className="font-bold font-display text-text-primary">{toast.title}</div>}
+              {toast.message && <div className="text-text-secondary mt-0.5 font-medium leading-relaxed">{toast.message}</div>}
+
+              {toast.actionLabel && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (toast.onAction) toast.onAction();
+                    removeToast(toast.id);
+                  }}
+                  className="mt-2 text-[11px] font-black uppercase text-brand hover:text-brand-hover tracking-wider underline cursor-pointer"
+                >
+                  {toast.actionLabel}
+                </button>
+              )}
             </div>
 
             <button
+              type="button"
               onClick={() => removeToast(toast.id)}
-              className="text-slate-400 hover:text-slate-700 p-1 transition-colors"
+              className="text-text-muted hover:text-text-primary p-1 transition-colors cursor-pointer"
+              aria-label="Dismiss alert"
             >
               <X className="w-4 h-4" />
             </button>
@@ -103,19 +138,15 @@ export function ToastProvider({ children }) {
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
-    const noop = () => {};
     return {
-      addToast: noop,
-      removeToast: noop,
-      success: noop,
-      error: noop,
-      warning: noop,
-      info: noop,
-      conquest: noop,
+      success: (m) => console.log('Toast:', m),
+      error: (m) => console.error('Toast Error:', m),
+      warning: (m) => console.warn('Toast Warning:', m),
+      info: (m) => console.log('Toast Info:', m),
+      conquest: (m) => console.log('Toast Conquest:', m),
+      addToast: () => {},
+      removeToast: () => {},
     };
   }
-  return {
-    ...context,
-    toast: context,
-  };
+  return context;
 }

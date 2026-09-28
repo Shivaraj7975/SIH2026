@@ -8,34 +8,43 @@ export default function CurrentLocationMarker({
   followUser = false,
 }) {
   const markerRef = useRef(null);
-  const coreRef = useRef(null);
-  const pulseRef = useRef(null);
+  const accuracyRingRef = useRef(null);
+  const headingConeRef = useRef(null);
+  const coreDotRef = useRef(null);
 
-  // Initialize and tear down marker only with map lifecycle
+  // Initialize and tear down marker with map lifecycle
   useEffect(() => {
     if (!map) return;
 
-    const userColor = activeUser?.color || '#00f2fe';
-    const userAvatar = activeUser?.avatar || '⚡';
+    const brandColor = '#7C3AED';
 
     const el = document.createElement('div');
-    el.className = 'relative flex items-center justify-center w-10 h-10 cursor-pointer';
+    el.className = 'relative flex items-center justify-center w-12 h-12 pointer-events-none';
     el.setAttribute('aria-label', 'Your Current Location');
 
-    const pulse = document.createElement('div');
-    pulse.className = 'player-marker-pulse';
-    pulse.style.backgroundColor = `${userColor}55`;
-    pulseRef.current = pulse;
+    // Soft accuracy ring (rgba(124,58,237,.15))
+    const accuracyRing = document.createElement('div');
+    accuracyRing.className = 'absolute rounded-full pointer-events-none transition-all duration-300';
+    accuracyRing.style.width = '48px';
+    accuracyRing.style.height = '48px';
+    accuracyRing.style.backgroundColor = 'rgba(124, 58, 237, 0.15)';
+    accuracyRing.style.border = '1px solid rgba(124, 58, 237, 0.3)';
+    accuracyRingRef.current = accuracyRing;
 
+    // Heading cone when moving
+    const headingCone = document.createElement('div');
+    headingCone.className = 'absolute -top-2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-[#7C3AED] transition-transform duration-200';
+    headingCone.style.transformOrigin = '50% 100%';
+    headingCone.style.display = 'none';
+    headingConeRef.current = headingCone;
+
+    // 16px circle, brand violet, white 3px border
     const core = document.createElement('div');
-    core.className =
-      'relative flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 border-2 shadow-xl text-xs font-bold transition-transform transform hover:scale-110';
-    core.style.borderColor = userColor;
-    core.style.boxShadow = `0 0 12px ${userColor}88`;
-    core.innerHTML = userAvatar;
-    coreRef.current = core;
+    core.className = 'relative w-4 h-4 rounded-full bg-[#7C3AED] border-[3px] border-white shadow-md transition-transform transform';
+    coreDotRef.current = core;
 
-    el.appendChild(pulse);
+    el.appendChild(accuracyRing);
+    el.appendChild(headingCone);
     el.appendChild(core);
 
     const marker = new maplibregl.Marker({ element: el });
@@ -46,31 +55,19 @@ export default function CurrentLocationMarker({
         markerRef.current.remove();
         markerRef.current = null;
       }
-      pulseRef.current = null;
-      coreRef.current = null;
+      accuracyRingRef.current = null;
+      headingConeRef.current = null;
+      coreDotRef.current = null;
     };
   }, [map]);
 
-  // Update visual styling if user profile changes
-  useEffect(() => {
-    const userColor = activeUser?.color || '#00f2fe';
-    const userAvatar = activeUser?.avatar || '⚡';
-    if (pulseRef.current) {
-      pulseRef.current.style.backgroundColor = `${userColor}55`;
-    }
-    if (coreRef.current) {
-      coreRef.current.style.borderColor = userColor;
-      coreRef.current.style.boxShadow = `0 0 12px ${userColor}88`;
-      coreRef.current.innerHTML = userAvatar;
-    }
-  }, [activeUser]);
-
-  // Move marker smoothly whenever userLocation updates without destroying DOM
+  // Move marker smoothly whenever userLocation updates
   useEffect(() => {
     if (!map || !markerRef.current || !userLocation) return;
 
     const rawLat = userLocation.latitude ?? userLocation.lat;
     const rawLng = userLocation.longitude ?? userLocation.lng;
+    const heading = userLocation.heading ?? userLocation.bearing;
     const lat = Number(rawLat);
     const lng = Number(rawLng);
 
@@ -78,7 +75,7 @@ export default function CurrentLocationMarker({
       return;
     }
 
-    // Ensure marker is attached to map
+    // Attach to map if not attached
     const el = markerRef.current.getElement();
     if (!el.parentNode) {
       markerRef.current.setLngLat([lng, lat]).addTo(map);
@@ -86,10 +83,20 @@ export default function CurrentLocationMarker({
       markerRef.current.setLngLat([lng, lat]);
     }
 
+    // Update heading cone
+    if (headingConeRef.current) {
+      if (heading !== null && heading !== undefined && !isNaN(heading)) {
+        headingConeRef.current.style.display = 'block';
+        headingConeRef.current.style.transform = `rotate(${heading}deg) translateY(-8px)`;
+      } else {
+        headingConeRef.current.style.display = 'none';
+      }
+    }
+
     if (followUser) {
       map.easeTo({
         center: [lng, lat],
-        duration: 400,
+        duration: 350,
       });
     }
   }, [map, userLocation, followUser]);

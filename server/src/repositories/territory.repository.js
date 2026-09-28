@@ -8,10 +8,10 @@ export class TerritoryRepository {
         tc.current_owner_id as "currentOwnerId",
         tc.current_owner_updated_at as "currentOwnerUpdatedAt",
         tc.last_captured_at as "lastCapturedAt",
-        u.display_name as "ownerDisplayName",
-        u.avatar as "ownerAvatar"
+        COALESCE(u.display_name, 'Athlete') as "ownerDisplayName",
+        COALESCE(u.avatar, '⚡') as "ownerAvatar"
       FROM territory_cells tc
-      JOIN users u ON tc.current_owner_id = u.id`
+      LEFT JOIN users u ON tc.current_owner_id = u.id`
     );
   }
 

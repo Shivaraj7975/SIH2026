@@ -2,40 +2,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import TerritoryLayer from './TerritoryLayer';
 import CurrentLocationMarker from './CurrentLocationMarker';
-import MapControls from './MapControls';
-import TerritoryPopup from './TerritoryPopup';
-import TerritoryLegend from '../ui/TerritoryLegend';
-import { AlertTriangle, RefreshCw, Layers } from 'lucide-react';
-import Button from '../ui/Button';
+import { RefreshCw, Plus, Minus, Moon, Sun, Compass, Crosshair } from 'lucide-react';
 
-const CARTO_API_KEY = import.meta.env.VITE_CARTO_API_KEY || 'cb1_3416_1_759e95d9268056dd40ffd715';
-
-const DARK_MAP_STYLE = {
-  version: 8,
-  sources: {
-    'carto-dark': {
-      type: 'raster',
-      tiles: [
-        `https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`,
-        `https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`,
-        `https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`,
-        `https://d.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`,
-      ],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    },
-  },
-  layers: [
-    {
-      id: 'carto-dark-layer',
-      type: 'raster',
-      source: 'carto-dark',
-      minzoom: 0,
-      maxzoom: 20,
-    },
-  ],
-};
+// Desaturated Carto / OpenFreeMap styles
+const LIGHT_MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+const DARK_MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
 export default function MapContainer({
   territoryGeoJson = { type: 'FeatureCollection', features: [] },
@@ -44,7 +15,7 @@ export default function MapContainer({
   activeUser = null,
   onCellClick = null,
   onMapLoaded = null,
-  initialCenter = [77.5946, 12.9716],
+  initialCenter = [77.5932, 12.9730],
   initialZoom = 17.5,
   isLoading = false,
   error = null,
@@ -58,9 +29,8 @@ export default function MapContainer({
   const [mapInstance, setMapInstance] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(null);
-  const [is3dPitch, setIs3dPitch] = useState(true);
-  const [isLegendOpen, setIsLegendOpen] = useState(false);
-  const [selectedCell, setSelectedCell] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [is3dPitch, setIs3dPitch] = useState(false);
   const [internalFollowUser, setInternalFollowUser] = useState(false);
   const followUser = controlledFollowUser !== undefined ? controlledFollowUser : internalFollowUser;
 
@@ -82,20 +52,16 @@ export default function MapContainer({
         ? [validUserLng, validUserLat]
         : (Array.isArray(initialCenter) && !isNaN(Number(initialCenter[0])) && !isNaN(Number(initialCenter[1]))
             ? [Number(initialCenter[0]), Number(initialCenter[1])]
-            : [77.5946, 12.9716]);
-
-      const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
-      const mapStyle = mapboxToken && mapboxToken.startsWith('pk.')
-        ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11?access_token=${mapboxToken}`
-        : DARK_MAP_STYLE;
+            : [77.5932, 12.9730]);
 
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: mapStyle,
+        style: isDarkMode ? DARK_MAP_STYLE : LIGHT_MAP_STYLE,
         center: center,
         zoom: initialZoom,
-        pitch: 45,
-        bearing: -17.6,
+        pitch: is3dPitch ? 45 : 0,
+        bearing: -15,
+        attributionControl: false,
         antialias: true,
       });
 
@@ -133,7 +99,7 @@ export default function MapContainer({
 
   const lastFlownCenterRef = useRef(null);
 
-  // Smooth Fly-To on major location shifts (switching cities/circuits or explicit forceFly), smooth easeTo during movement
+  // Smooth Fly-To / Ease-To
   useEffect(() => {
     if (!mapInstance || !userLocation) return;
     const lat = Number(userLocation.latitude);
@@ -149,7 +115,7 @@ export default function MapContainer({
           zoom: 17.5,
           pitch: is3dPitch ? 45 : 0,
           essential: true,
-          duration: 1000,
+          duration: 800,
         });
       } catch (err) {}
       return;
@@ -157,7 +123,6 @@ export default function MapContainer({
 
     const dLat = Math.abs(lat - prev[1]);
     const dLng = Math.abs(lng - prev[0]);
-    // If major jump > ~100m (e.g. city hub switch or simulation circuit jump)
     if (dLat > 0.001 || dLng > 0.001) {
       lastFlownCenterRef.current = [lng, lat];
       try {
@@ -166,57 +131,46 @@ export default function MapContainer({
           zoom: 17.5,
           pitch: is3dPitch ? 45 : 0,
           essential: true,
-          duration: 1000,
+          duration: 800,
         });
       } catch (err) {}
     } else if (followUser) {
-      // Smooth incremental tracking during movement
       try {
         mapInstance.easeTo({
           center: [lng, lat],
-          duration: 400,
+          duration: 350,
         });
       } catch (err) {}
     }
   }, [mapInstance, userLocation?.latitude, userLocation?.longitude, userLocation?.forceFly, is3dPitch, followUser]);
 
-  const handleLocateMe = useCallback(() => {
+  const handleToggleDarkMode = useCallback(() => {
     if (!mapInstance) return;
-    if (userLocation) {
-      lastFlownCenterRef.current = [userLocation.longitude, userLocation.latitude];
-      mapInstance.flyTo({
-        center: [userLocation.longitude, userLocation.latitude],
-        zoom: 18,
-        pitch: is3dPitch ? 50 : 0,
-        essential: true,
-        duration: 1200,
-      });
-      setFollowUser(true);
-    } else {
-      navigator.geolocation?.getCurrentPosition(
-        (pos) => {
-          lastFlownCenterRef.current = [pos.coords.longitude, pos.coords.latitude];
-          mapInstance.flyTo({
-            center: [pos.coords.longitude, pos.coords.latitude],
-            zoom: 18,
-            pitch: is3dPitch ? 50 : 0,
-            essential: true,
-            duration: 1200,
-          });
-          setFollowUser(true);
-        },
-        (err) => console.warn('Could not acquire location:', err)
-      );
-    }
-  }, [mapInstance, userLocation, is3dPitch]);
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    mapInstance.setStyle(nextDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE);
+  }, [mapInstance, isDarkMode]);
 
   const handleZoomIn = useCallback(() => {
-    if (mapInstance) mapInstance.zoomIn({ duration: 300 });
+    if (mapInstance) mapInstance.zoomIn({ duration: 200 });
   }, [mapInstance]);
 
   const handleZoomOut = useCallback(() => {
-    if (mapInstance) mapInstance.zoomOut({ duration: 300 });
+    if (mapInstance) mapInstance.zoomOut({ duration: 200 });
   }, [mapInstance]);
+
+  const handleRecenterOnMe = useCallback(() => {
+    if (!mapInstance) return;
+    setFollowUser(true);
+    const lat = userLocation ? Number(userLocation.latitude) : 12.9730;
+    const lng = userLocation ? Number(userLocation.longitude) : 77.5932;
+    mapInstance.flyTo({
+      center: [lng, lat],
+      zoom: 17.5,
+      pitch: is3dPitch ? 45 : 0,
+      duration: 600,
+    });
+  }, [mapInstance, userLocation, is3dPitch, setFollowUser]);
 
   const handleResetMap = useCallback(() => {
     if (!mapInstance) return;
@@ -224,32 +178,24 @@ export default function MapContainer({
     mapInstance.flyTo({
       center: initialCenter,
       zoom: initialZoom,
-      pitch: 45,
-      bearing: -17.6,
-      duration: 1000,
+      pitch: is3dPitch ? 45 : 0,
+      bearing: -15,
+      duration: 700,
     });
-  }, [mapInstance, initialCenter, initialZoom]);
+  }, [mapInstance, initialCenter, initialZoom, is3dPitch, setFollowUser]);
 
   const handleToggle3D = useCallback(() => {
     if (!mapInstance) return;
-    const nextPitch = is3dPitch ? 0 : 55;
+    const nextPitch = is3dPitch ? 0 : 50;
     mapInstance.easeTo({
       pitch: nextPitch,
-      duration: 600,
+      duration: 350,
     });
     setIs3dPitch(!is3dPitch);
   }, [mapInstance, is3dPitch]);
 
-  const handleCellClick = useCallback(
-    (props, feature) => {
-      setSelectedCell(props);
-      if (onCellClick) onCellClick(props, feature);
-    },
-    [onCellClick]
-  );
-
   return (
-    <div className={`relative w-full h-full min-h-[400px] overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 ${className}`}>
+    <div className={`relative w-full h-full overflow-hidden bg-slate-100 ${className}`}>
       <div ref={containerRef} className="w-full h-full" />
 
       {mapReady && mapInstance && (
@@ -259,90 +205,97 @@ export default function MapContainer({
             territoryGeoJson={territoryGeoJson}
             activeTrail={activeTrail}
             activeUserId={activeUser?.id}
-            onCellClick={handleCellClick}
-            showPopup={true}
+            onCellClick={onCellClick}
           />
-
           <CurrentLocationMarker
             map={mapInstance}
             userLocation={userLocation}
             activeUser={activeUser}
             followUser={followUser}
           />
-
-          <MapControls
-            onLocateMe={handleLocateMe}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onResetMap={handleResetMap}
-            onToggle3D={handleToggle3D}
-            is3dActive={is3dPitch}
-            onToggleLegend={() => setIsLegendOpen(!isLegendOpen)}
-            isLegendOpen={isLegendOpen}
-          />
-
-          {isLegendOpen && (
-            <div className="absolute top-16 right-4 z-20 animate-in fade-in zoom-in-95 duration-150">
-              <TerritoryLegend />
-            </div>
-          )}
-
-          {selectedCell && (
-            <div className="absolute bottom-6 left-6 z-30 max-w-sm">
-              <TerritoryPopup
-                sector={selectedCell}
-                onClose={() => setSelectedCell(null)}
-                activeUserId={activeUser?.id}
-              />
-            </div>
-          )}
         </>
       )}
 
+      {/* Grouped Vertical Control Cluster on Right Edge (44px buttons, 12px radius, white/90% glass, shadow-md) */}
+      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2.5 pointer-events-auto">
+        {/* Recenter on me (Prominent Crosshair Button) */}
+        <button
+          type="button"
+          onClick={handleRecenterOnMe}
+          className="w-11 h-11 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-md flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+          title="Recenter on my position"
+          aria-label="Recenter map on my location"
+        >
+          <Crosshair className="w-5 h-5 stroke-[2.5]" />
+        </button>
+
+        {/* Vertical Tool Cluster */}
+        <div className="flex flex-col bg-white/90 backdrop-blur-md border border-slate-200 shadow-md rounded-xl overflow-hidden divide-y divide-slate-100">
+          {/* Zoom In */}
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            className="w-11 h-11 flex items-center justify-center text-slate-700 hover:text-[#7C3AED] hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Zoom In"
+            aria-label="Zoom in"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+          </button>
+
+          {/* Zoom Out */}
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="w-11 h-11 flex items-center justify-center text-slate-700 hover:text-[#7C3AED] hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Zoom Out"
+            aria-label="Zoom out"
+          >
+            <Minus className="w-4 h-4 stroke-[2.5]" />
+          </button>
+
+          {/* Night / Dark Mode */}
+          <button
+            type="button"
+            onClick={handleToggleDarkMode}
+            className="w-11 h-11 flex items-center justify-center text-slate-700 hover:text-[#7C3AED] hover:bg-slate-50 transition-colors cursor-pointer"
+            title={isDarkMode ? 'Switch to Light Map' : 'Switch to Dark Map (Night Mode)'}
+            aria-label="Toggle dark map style"
+          >
+            {isDarkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-slate-700" />}
+          </button>
+
+          {/* 3D Perspective */}
+          <button
+            type="button"
+            onClick={handleToggle3D}
+            className={`w-11 h-11 flex items-center justify-center text-xs font-sans font-bold transition-colors cursor-pointer ${
+              is3dPitch ? 'bg-[#7C3AED] text-white' : 'text-slate-700 hover:text-[#7C3AED] hover:bg-slate-50'
+            }`}
+            title="Toggle 3D Pitch"
+            aria-label="Toggle 3D perspective"
+          >
+            3D
+          </button>
+
+          {/* Reset Camera to North */}
+          <button
+            type="button"
+            onClick={handleResetMap}
+            className="w-11 h-11 flex items-center justify-center text-slate-700 hover:text-[#7C3AED] hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Reset North View"
+            aria-label="Reset map orientation to North"
+          >
+            <Compass className="w-4 h-4 text-slate-700 hover:text-[#7C3AED]" />
+          </button>
+        </div>
+      </div>
+
+      {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute top-4 left-4 z-30 flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-400 font-mono text-xs backdrop-blur-md shadow-xl pointer-events-none animate-in fade-in duration-200">
-          <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-          <span>Syncing Tactical Grid...</span>
-        </div>
-      )}
-
-      {/* Grid Sync Notice (Non-fatal, doesn't obscure map) */}
-      {error && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-md w-full px-4 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/95 border border-amber-500/40 text-amber-200 text-xs backdrop-blur-md shadow-2xl">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{error}</span>
-            </div>
-            {onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg font-mono text-[11px] font-bold border border-amber-500/30 transition-all cursor-pointer shrink-0"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Fatal Map Canvas Initialization Error (Only if MapLibre itself fails to initialize) */}
-      {mapError && !mapReady && (
-        <div className="absolute inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-6 text-center">
-          <div className="max-w-md p-6 rounded-3xl glass-panel border border-rose-500/30 space-y-4">
-            <div className="p-3 bg-rose-500/10 text-rose-400 w-12 h-12 rounded-2xl mx-auto flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Map Engine Initialization Failed</h3>
-              <p className="text-xs text-slate-400 mt-1">{mapError}</p>
-            </div>
-            {onRetry && (
-              <Button variant="primary" size="sm" onClick={onRetry} icon={RefreshCw}>
-                Retry Map Connection
-              </Button>
-            )}
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-xs flex items-center justify-center z-30 pointer-events-none">
+          <div className="bg-white px-4 py-2 rounded-2xl shadow-lg border border-slate-200 flex items-center gap-2 text-xs font-semibold text-slate-800">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#7C3AED]" />
+            <span>Syncing Tactical Grid...</span>
           </div>
         </div>
       )}

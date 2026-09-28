@@ -11,10 +11,11 @@ router.post('/register', async (req, res, next) => {
     const user = await registerUser({ username, displayName, avatar, password });
     const token = createSessionToken(user.id);
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('geofit_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
@@ -34,10 +35,11 @@ router.post('/login', async (req, res, next) => {
     const user = await authenticateUser(username, password);
     const token = createSessionToken(user.id);
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('geofit_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 

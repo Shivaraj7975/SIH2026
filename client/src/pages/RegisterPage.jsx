@@ -18,10 +18,10 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // If already authenticated, redirect to dashboard
+  // If already authenticated, redirect to map
   useEffect(() => {
     if (user?.id) {
-      navigate('/dashboard', { replace: true });
+      navigate('/map', { replace: true });
     }
   }, [user, navigate]);
 
@@ -43,7 +43,7 @@ export default function RegisterPage() {
       try {
         toast?.success?.(`Account created! Welcome, ${loggedUser?.displayName || loggedUser?.username}!`);
       } catch (_) {}
-      navigate('/dashboard', { replace: true });
+      navigate('/map', { replace: true });
     } catch (err) {
       try {
         toast?.error?.(err.message || 'Registration failed');

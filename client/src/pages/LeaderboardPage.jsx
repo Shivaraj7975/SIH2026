@@ -4,12 +4,13 @@ import AppShell from '../components/layout/AppShell.jsx';
 import LeaderboardRow from '../components/ui/LeaderboardRow.jsx';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/ui/Card.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
-import { Trophy, Info, Sparkles, HelpCircle, Shield, MapPin, Award, Compass, Zap, Flame } from 'lucide-react';
+import Chip from '../components/ui/Chip.jsx';
+import { Trophy, Info, Sparkles, HelpCircle, Shield, Zap, Compass, Flame, Award } from 'lucide-react';
 import { api } from '../lib/api.js';
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
-  const [timeframe, setTimeframe] = useState('weekly'); // 'daily' or 'weekly' only
+  const [timeframe, setTimeframe] = useState('weekly'); // 'daily' or 'weekly'
   const [sector, setSector] = useState('distance'); // 'distance', 'holding', or 'total_area'
   const [rankings, setRankings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,40 +35,44 @@ export default function LeaderboardPage() {
   };
 
   const SECTORS = [
-    { id: 'distance', label: 'Distance Covered', icon: Zap, color: 'text-purple-600' },
-    { id: 'holding', label: 'Current Holding Area', icon: Shield, color: 'text-slate-900' },
-    { id: 'total_area', label: 'Total Area Captured', icon: FlagSectorIcon, color: 'text-purple-600' },
+    { id: 'distance', label: 'Distance', fullLabel: 'Distance Covered', icon: Zap, color: 'text-purple-600', unit: 'km' },
+    { id: 'holding', label: 'Holding', fullLabel: 'Current Holding Area', icon: Shield, color: 'text-cyan-600', unit: 'm²' },
+    { id: 'total_area', label: 'Captured', fullLabel: 'Total Area Captured', icon: Compass, color: 'text-purple-600', unit: 'm²' },
   ];
 
-  function FlagSectorIcon(props) {
-    return <Compass {...props} />;
-  }
+  // Find if user is in rankings
+  const currentUserEntry = rankings.find(
+    (r) => user?.id === r.id || user?.id === r.userId || user?.username === r.username
+  );
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-5xl mx-auto font-sans">
-        {/* Header with Title & Timeframe Selector */}
+      <div className="space-y-6 max-w-5xl mx-auto font-sans pb-12">
+        {/* Header with Title & Segmented Control */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase flex items-center gap-2.5">
-              <Trophy className="w-7 h-7 text-purple-600" />
-              <span>Athletic Competition</span>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+              <span className="p-2 rounded-xl bg-purple-50 text-brand border border-purple-200 shadow-xs">
+                <Trophy className="w-6 h-6" />
+              </span>
+              <span>Dominion Standings</span>
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Live ranking across <span className="text-purple-600 font-black">Daily & Weekly</span> performance sectors
+              Live athletic conquest rankings across <span className="text-brand font-semibold">Daily</span> and{' '}
+              <span className="text-brand font-semibold">Weekly</span> performance leagues.
             </p>
           </div>
 
-          {/* Timeframe Filter: Strictly Daily & Weekly */}
+          {/* Timeframe Segmented Control: Daily | Weekly */}
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <div className="flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-wider">
+            <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setTimeframe('daily')}
-                className={`px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                className={`px-4 py-2 rounded-lg transition-all cursor-pointer font-medium ${
                   timeframe === 'daily'
-                    ? 'bg-purple-600 text-white font-black shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-xs font-bold'
+                    : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
                 Daily
@@ -75,10 +80,10 @@ export default function LeaderboardPage() {
               <button
                 type="button"
                 onClick={() => setTimeframe('weekly')}
-                className={`px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                className={`px-4 py-2 rounded-lg transition-all cursor-pointer font-medium ${
                   timeframe === 'weekly'
-                    ? 'bg-purple-600 text-white font-black shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-xs font-bold'
+                    : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
                 Weekly
@@ -87,21 +92,18 @@ export default function LeaderboardPage() {
 
             <button
               onClick={() => setShowInfo(!showInfo)}
-              className="p-2.5 bg-white border border-slate-200 hover:border-purple-300 rounded-xl text-slate-500 hover:text-purple-600 transition-colors cursor-pointer shadow-sm"
-              title="How rankings and sectors work"
+              className="p-2.5 bg-white border border-slate-200 hover:border-purple-300 rounded-xl text-slate-500 hover:text-brand transition-colors cursor-pointer shadow-xs"
+              title="How rankings and metrics work"
+              aria-label="How rankings work"
             >
               <HelpCircle className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* The 3 Sectors Selector */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-          <div className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-purple-600" />
-            <span>Select Sector Ranking:</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {/* Category Tabs: Distance · Holding · Captured */}
+        <div className="p-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-xs">
+          <div className="grid grid-cols-3 gap-1.5">
             {SECTORS.map((sec) => {
               const Icon = sec.icon;
               const isSelected = sector === sec.id;
@@ -110,15 +112,17 @@ export default function LeaderboardPage() {
                   key={sec.id}
                   type="button"
                   onClick={() => setSector(sec.id)}
-                  className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer text-left ${
+                  className={`flex items-center justify-center sm:justify-start gap-2 py-3 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-purple-50 border-purple-400 text-purple-700 shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-white'
+                      ? 'bg-purple-50 border-purple-300 text-brand shadow-xs'
+                      : 'bg-transparent border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${sec.color} flex-shrink-0`} />
-                  <div className="min-w-0">
-                    <div className="truncate">{sec.label}</div>
+                  <Icon className={`w-4 h-4 ${isSelected ? 'text-brand' : sec.color} flex-shrink-0`} />
+                  <div className="min-w-0 flex items-center gap-1.5">
+                    <span className="hidden sm:inline">{sec.fullLabel}</span>
+                    <span className="sm:hidden">{sec.label}</span>
+                    <span className="text-[10px] font-normal text-slate-400 font-display">({sec.unit})</span>
                   </div>
                 </button>
               );
@@ -126,56 +130,85 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        {/* Explainable Sector Rules Callout */}
+        {/* Explainable Metric Rules Callout */}
         {showInfo && (
-          <Card variant="glass" className="p-4 border-slate-200 bg-white shadow-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-purple-600 font-black text-xs uppercase tracking-wider">
+          <Card variant="surface" className="p-4 border-slate-200 bg-white shadow-xs">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-brand font-bold text-xs uppercase tracking-wider">
                 <Sparkles className="w-4 h-4" />
-                <span>Sector Mechanics & Non-Decreasing Total Area</span>
+                <span>Sector Conquest & Invariant Metric Rules</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-600 pt-1">
-                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="font-bold text-purple-700 mb-1">🏃 1. Distance Covered</div>
-                  <p className="text-[11px] text-slate-500">Total verified distance in km logged by the athlete during the selected {timeframe} window.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-600">
+                <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                  <div className="font-bold text-brand mb-1 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" /> 1. Distance Covered
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Total verified GPS distance (km) logged during the selected {timeframe} timeframe.
+                  </p>
                 </div>
-                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">🛡️ 2. Current Holding Area</div>
-                  <p className="text-[11px] text-slate-500">The live territory area (m²) currently held by the athlete on the map. Decreases if opponents capture your cells.</p>
+                <div className="p-3 bg-cyan-50/50 rounded-xl border border-cyan-100">
+                  <div className="font-bold text-cyan-800 mb-1 flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" /> 2. Currently Holding
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Live territorial area (m²) currently held. Decreases if opponents capture your cells.
+                  </p>
                 </div>
-                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="font-bold text-purple-700 mb-1">🚩 3. Total Area Captured</div>
-                  <p className="text-[11px] text-slate-500">The cumulative territory (m²) conquered by the athlete. Irrespective of opponents stealing cells, this total never decreases!</p>
+                <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                  <div className="font-bold text-brand mb-1 flex items-center gap-1.5">
+                    <Compass className="w-3.5 h-3.5" /> 3. Total Area Captured
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Cumulative territory (m²) conquered. This metric is monotonic and <strong className="text-brand">never decreases</strong>!
+                  </p>
                 </div>
               </div>
             </div>
           </Card>
         )}
 
-        {/* Sector Explainer Banner */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600 shadow-sm">
-          <Info className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            Currently ranked by <span className="font-black text-purple-700 uppercase">{sector.replace('_', ' ')}</span> in the <span className="font-black text-slate-900 uppercase">{timeframe}</span> league. Notice that while <span className="text-slate-900 font-bold">Current Holding</span> shifts as other runners take cells, your <span className="text-purple-700 font-bold">Total Area Captured</span> is permanent and never decrements.
+        {/* Pinned Current User Row (if user not in top 3 or to give immediate glanceability) */}
+        {currentUserEntry && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
+              <span>Your Standing</span>
+            </div>
+            <LeaderboardRow
+              rank={currentUserEntry.rank}
+              rankChange={currentUserEntry.rankChange || 0}
+              user={{
+                id: user?.id,
+                username: user?.username,
+                displayName: user?.displayName || user?.username,
+                avatar: user?.avatar || '⚡',
+              }}
+              distanceKm={currentUserEntry.distanceKm || (currentUserEntry.total_distance_meters ? currentUserEntry.total_distance_meters / 1000 : 0)}
+              currentHoldingAreaM2={currentUserEntry.currentHoldingAreaM2 || 0}
+              currentCellsOwned={currentUserEntry.currentCellsOwned || 0}
+              totalAreaCapturedM2={currentUserEntry.totalAreaCapturedM2 || 0}
+              activeSector={sector}
+              isCurrentUser={true}
+            />
           </div>
-        </div>
+        )}
 
         {/* Standings List */}
-        <Card variant="glass" className="border-slate-200 bg-white shadow-sm">
-          <CardHeader className="border-b border-slate-100">
-            <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-900">
-              <span>{timeframe === 'daily' ? "Today's" : "This Week's"} Standings</span>
+        <Card variant="surface" className="border-slate-200/80 bg-white shadow-xs">
+          <CardHeader className="border-b border-slate-100 pb-3">
+            <CardTitle className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              <span>{timeframe === 'daily' ? "Today's" : "This Week's"} League Standings</span>
             </CardTitle>
-            <span className="text-xs text-slate-500 font-mono">
+            <Chip variant="neutral" size="sm">
               {rankings.length} Competitors
-            </span>
+            </Chip>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="pt-3">
             {loading ? (
               <LoadingState message="Aggregating live competition sectors..." />
             ) : rankings.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-500 font-mono">
+              <div className="text-center py-12 text-xs text-slate-500 font-sans">
                 No active competition logs for this timeframe yet. Log a workout to claim your sector standing!
               </div>
             ) : (
@@ -186,6 +219,7 @@ export default function LeaderboardPage() {
                     rank={r.rank}
                     rankChange={r.rankChange || 0}
                     user={{
+                      id: r.id || r.userId,
                       username: r.username || r.name?.toLowerCase().replace(/\s+/g, '') || r.id,
                       displayName: r.displayName || r.name,
                       avatar: r.avatar || '⚡',

@@ -1,0 +1,108 @@
+:root {
+  /* Surfaces */
+  --bg-canvas: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-inverse: #0F172A;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  /* Text */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --text-inverse: #F8FAFC;
+
+  /* Brand & Accents */
+  --brand: #7C3AED;
+  --brand-hover: #6D28D9;
+  --brand-soft: #EDE9FE;
+  --accent-lime: #A3E635;
+  --accent-amber: #F59E0B;
+  --danger: #EF4444;
+  --success: #10B981;
+
+  /* Territory Standard Tokens (Single Source of Truth) */
+  --territory-mine: #7C3AED;
+  --territory-mine-stroke: #5B21B6;
+  --territory-rival: #06B6D4;
+  --territory-contested: #F59E0B;
+  --territory-neutral: #CBD5E1;
+
+  /* Territory 4-Color Rival Rotation */
+  --rival-cyan: #06B6D4;
+  --rival-pink: #EC4899;
+  --rival-yellow: #EAB308;
+  --rival-blue: #3B82F6;
+
+  /* Typography */
+  --font-display: 'Space Grotesk', -apple-system, sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Elevation Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.14);
+}
+
+/* Dark Map Mode */
+[data-theme='dark'] {
+  --bg-canvas: #0B1220;
+  --bg-surface: #0F172A;
+  --bg-elevated: #1E293B;
+  --bg-inverse: #FFFFFF;
+  --border: #1E293B;
+  --border-strong: #334155;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --text-inverse: #0F172A;
+
+  --brand-soft: #2E1065;
+}
+
+/* Tabular Numerals utility */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Focus ring standard */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid #7C3AED;
+  outline-offset: 2px;
+}
+
+/* Glass map panels */
+.glass-map-panel {
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.glass-dark-sheet {
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -5,13 +5,15 @@
 
 ---
 
-## 📄 SLIDE 1: TITLE SLIDE
-* **Idea / Project Title:** GeoFit — Gamifying Physical Fitness via Real-World Hexagonal Territory Conquest
-* **Problem Statement Category:** Student Innovation (Ideas that can boost fitness activities and assist in keeping fit)
-* **Team Name:** [Your Team Name]
-* **Team Members / Leader:** [Your Team Leader & Member Names]
-* **Institute / College:** [Your College / Institute Name]
-* **Core Value Proposition:** *Transforming sedentary campus routines into an engaging, competitive outdoor turf-war game where every step conquers real-world territory.*
+## 📄 SLIDE 1: TITLE PAGE
+* **Problem Statement ID –** `SIH2026-SI` *(or your team's assigned Problem Statement ID)*
+* **Problem Statement Title –** Student Innovation — Ideas that can boost fitness activities and assist in keeping fit
+* **Theme –** Sports & Fitness / HealthTech / Student Innovation
+* **PS Category – Software/Hardware –** Software
+* **Team ID –** `[Enter Team ID registered on SIH portal]`
+* **Team Name (Registered on portal) –** `[Enter Registered Team Name]`
+* **Project Title / Solution Name –** GeoFit: Real-World Hexagonal Territory Conquest & Fitness Gamification
+* **Core Value Proposition –** *Transforming sedentary campus routines into an interactive outdoor turf-war game where every step conquers real-world territory.*
 
 ---
 

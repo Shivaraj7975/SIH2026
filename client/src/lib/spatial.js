@@ -11,21 +11,24 @@ export const H3_CELL_AREA_KM2 = FITNESS_CONFIG.GEOMETRY.H3_CELL_AREA_KM2 || 0.00
 // Centralized configurable geometric closure tolerance (in meters)
 export const CLOSURE_TOLERANCE_METERS = FITNESS_CONFIG.GEOMETRY.PROXIMITY_CLOSURE_TOLERANCE_METERS || 20;
 
+export const RIVAL_PALETTE = ['#06B6D4', '#EC4899', '#EAB308', '#3B82F6'];
+
 /**
  * Deterministic color assignment based on user ID.
- * Produces a vibrant, saturated HSL color that is consistent for the same user.
+ * Cycles through [#06B6D4, #EC4899, #EAB308, #3B82F6] for rivals, and #7C3AED for active player.
  */
-export function getUserColor(userId) {
-  if (!userId) return '#00f2fe';
+export function getUserColor(userId, activeUserId) {
+  if (userId && activeUserId && userId === activeUserId) {
+    return '#7C3AED';
+  }
+  if (!userId) return '#06B6D4';
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = userId.charCodeAt(i) + ((hash << 5) - hash);
     hash = hash & hash;
   }
-  const hue = Math.abs(hash) % 360;
-  const saturation = 70 + (Math.abs(hash >> 8) % 20);
-  const lightness = 55 + (Math.abs(hash >> 16) % 15);
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  const idx = Math.abs(hash) % RIVAL_PALETTE.length;
+  return RIVAL_PALETTE[idx];
 }
 
 /**

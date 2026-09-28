@@ -3,7 +3,7 @@ import Navbar from '../Navbar.jsx';
 import DailyChallengeModal from '../DailyChallengeModal.jsx';
 import ScenarioDemoModal from '../ScenarioDemoModal.jsx';
 
-export default function AppShell({ children, className = '' }) {
+export default function AppShell({ children, className = '', fullBleed = false }) {
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
 
@@ -15,7 +15,7 @@ export default function AppShell({ children, className = '' }) {
         onOpenDemo={() => setIsDemoModalOpen(true)}
       />
 
-      <main className={`flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 ${className}`}>
+      <main className={fullBleed ? `flex-1 w-full ${className}` : `flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 ${className}`}>
         {children}
       </main>
 

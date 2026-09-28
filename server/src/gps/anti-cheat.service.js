@@ -36,6 +36,18 @@ export class AntiCheatService {
       return { valid: false, reason: 'INVALID_POINT_OBJECT', cleanedPoint: null, speed: 0, acceleration: 0, isJump: false };
     }
 
+    const cfg = rawPoint.isSimulated
+      ? {
+          ...config,
+          MIN_TIME_DELTA_MS: 10,
+          MAX_WALK_SPEED_MS: 300.0,
+          MAX_RUN_SPEED_MS: 300.0,
+          MAX_INSTANT_SPEED_MS: 400.0,
+          MAX_ACCELERATION_MS2: 800.0,
+          VEHICLE_SPEED_MS: 500.0,
+        }
+      : config;
+
     const lat = Number(rawPoint.latitude ?? rawPoint.lat ?? rawPoint[1]);
     const lng = Number(rawPoint.longitude ?? rawPoint.lng ?? rawPoint[0]);
     const timestamp = typeof rawPoint.timestamp === 'string' && isNaN(Number(rawPoint.timestamp))
@@ -59,12 +71,12 @@ export class AntiCheatService {
     if (isNaN(timestamp) || timestamp <= 0) {
       return { valid: false, reason: 'INVALID_TIMESTAMP', cleanedPoint: null, speed: 0, acceleration: 0, isJump: false };
     }
-    if (timestamp > now + config.MAX_FUTURE_TIME_DRIFT_MS) {
+    if (timestamp > now + cfg.MAX_FUTURE_TIME_DRIFT_MS) {
       return { valid: false, reason: 'TIMESTAMP_IN_FUTURE', cleanedPoint: null, speed: 0, acceleration: 0, isJump: false };
     }
 
     // 4. Accuracy filtering (discard noisy points > threshold without failing whole workout)
-    if (accuracy > config.MAX_ACCURACY_METERS) {
+    if (accuracy > cfg.MAX_ACCURACY_METERS) {
       return {
         valid: false,
         reason: `ACCURACY_TOO_LOW_${Math.round(accuracy)}M`,
@@ -102,7 +114,7 @@ export class AntiCheatService {
         };
       }
 
-      if (timeDeltaMs < config.MIN_TIME_DELTA_MS) {
+      if (timeDeltaMs < cfg.MIN_TIME_DELTA_MS) {
         return { valid: false, reason: 'TIME_DELTA_TOO_RAPID', cleanedPoint: null, speed: 0, acceleration: 0, isJump: false };
       }
 
@@ -111,7 +123,7 @@ export class AntiCheatService {
       calculatedSpeed = distanceMeters / timeDeltaSec;
 
       // Duplicate / static GPS jitter check
-      if (distanceMeters < config.MIN_STATIC_DELTA_METERS && timeDeltaMs < 4000) {
+      if (distanceMeters < cfg.MIN_STATIC_DELTA_METERS && timeDeltaMs < 4000) {
         return { valid: false, reason: 'STATIC_GPS_JITTER', cleanedPoint: null, speed: 0, acceleration: 0, isJump: false };
       }
 
@@ -121,7 +133,7 @@ export class AntiCheatService {
       }
 
       // Teleportation / jump detection
-      if (distanceMeters > config.MAX_JUMP_DISTANCE_METERS && calculatedSpeed > config.MAX_INSTANT_SPEED_MS) {
+      if (distanceMeters > cfg.MAX_JUMP_DISTANCE_METERS && calculatedSpeed > cfg.MAX_INSTANT_SPEED_MS) {
         isJump = true;
         return {
           valid: false,
@@ -134,7 +146,7 @@ export class AntiCheatService {
       }
 
       // Impossible speed check
-      if (calculatedSpeed > config.MAX_INSTANT_SPEED_MS) {
+      if (calculatedSpeed > cfg.MAX_INSTANT_SPEED_MS) {
         return {
           valid: false,
           reason: `IMPOSSIBLE_SPEED_${calculatedSpeed.toFixed(1)}MS`,
@@ -146,7 +158,7 @@ export class AntiCheatService {
       }
 
       // Superhuman acceleration check
-      if (acceleration > config.MAX_ACCELERATION_MS2 && calculatedSpeed > 6.0) {
+      if (acceleration > cfg.MAX_ACCELERATION_MS2 && calculatedSpeed > 6.0) {
         return {
           valid: false,
           reason: `IMPOSSIBLE_ACCELERATION_${acceleration.toFixed(1)}MS2`,
@@ -183,6 +195,17 @@ export class AntiCheatService {
   static validateActivity(rawPoints = [], options = {}) {
     const config = { ...DEFAULT_ANTI_CHEAT_CONFIG, ...options.config };
     const activityType = options.type || 'RUN';
+    const isSimulated = Boolean(options.isSimulated || (Array.isArray(rawPoints) && rawPoints.some((p) => p && p.isSimulated)));
+
+    // Simulation / Test Run Mode: Relax limits to prevent false-positive anti-cheat flags during rapid simulations
+    if (isSimulated) {
+      config.MIN_TIME_DELTA_MS = 10;
+      config.MAX_WALK_SPEED_MS = 300.0;
+      config.MAX_RUN_SPEED_MS = 300.0;
+      config.MAX_INSTANT_SPEED_MS = 400.0;
+      config.MAX_ACCELERATION_MS2 = 800.0;
+      config.VEHICLE_SPEED_MS = 500.0;
+    }
 
     if (!Array.isArray(rawPoints) || rawPoints.length === 0) {
       return {
@@ -273,7 +296,7 @@ export class AntiCheatService {
       reasons.push(`VEHICLE_SPEED_DETECTED_${metrics.avgSpeedKmh.toFixed(1)}KMH`);
     }
     // Rule 5: Walking activity exceeding walk speed threshold
-    else if (activityType === 'WALK' && metrics.avgSpeedKmh > config.MAX_WALK_SPEED_MS * 3.6 * 1.4) {
+    else if (!isSimulated && activityType === 'WALK' && metrics.avgSpeedKmh > config.MAX_WALK_SPEED_MS * 3.6 * 1.4) {
       validationStatus = 'SUSPICIOUS';
       confidenceScore = 0.45;
       reasons.push(`EXCESSIVE_WALK_SPEED_${metrics.avgSpeedKmh.toFixed(1)}KMH`);

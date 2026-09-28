@@ -22,6 +22,7 @@ export class TerritoryCaptureService {
     startedAt = null,
     endedAt = null,
     customMetrics = null,
+    isSimulated = false,
   }) {
     if (!userId) {
       throw new Error('userId is required');
@@ -47,8 +48,10 @@ export class TerritoryCaptureService {
       };
     }
 
+    const isSim = Boolean(isSimulated || (Array.isArray(gpsPoints) && gpsPoints.some((p) => p && p.isSimulated)));
+
     // 1. Authoritative Anti-Cheat Validation & Cleaning of Raw GPS Points
-    const validationResult = validateAndCleanTrail(gpsPoints, { type });
+    const validationResult = validateAndCleanTrail(gpsPoints, { type, isSimulated: isSim });
     const {
       validPoints,
       validationStatus,

@@ -19,19 +19,19 @@ export default function MapControls({
           type="button"
           onClick={onLocateMe}
           title="Locate Me (Center on GPS)"
-          className="p-2.5 sm:p-3 bg-slate-900/90 hover:bg-slate-800 text-cyan-400 hover:text-cyan-300 border border-slate-700/80 rounded-xl shadow-xl backdrop-blur-md transition-all active:scale-95 group focus:outline-none cursor-pointer"
+          className="p-2.5 sm:p-3 bg-white/95 hover:bg-white text-purple-600 hover:text-purple-700 border border-slate-200 rounded-2xl shadow-lg backdrop-blur-md transition-all active:scale-95 group focus:outline-none cursor-pointer"
         >
           <Navigation2 className="w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-12 transition-transform" />
         </button>
       )}
 
-      <div className="flex flex-col bg-slate-900/90 border border-slate-700/80 rounded-xl shadow-xl backdrop-blur-md overflow-hidden">
+      <div className="flex flex-col bg-white/95 border border-slate-200 rounded-2xl shadow-lg backdrop-blur-md overflow-hidden">
         {onZoomIn && (
           <button
             type="button"
             onClick={onZoomIn}
             title="Zoom In"
-            className="p-2.5 sm:p-3 text-slate-200 hover:text-white hover:bg-slate-800/80 border-b border-slate-800 transition-colors active:scale-95 focus:outline-none cursor-pointer"
+            className="p-2.5 sm:p-3 text-slate-700 hover:text-purple-600 hover:bg-slate-50 border-b border-slate-100 transition-colors active:scale-95 focus:outline-none cursor-pointer"
           >
             <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -41,7 +41,7 @@ export default function MapControls({
             type="button"
             onClick={onZoomOut}
             title="Zoom Out"
-            className="p-2.5 sm:p-3 text-slate-200 hover:text-white hover:bg-slate-800/80 transition-colors active:scale-95 focus:outline-none cursor-pointer"
+            className="p-2.5 sm:p-3 text-slate-700 hover:text-purple-600 hover:bg-slate-50 transition-colors active:scale-95 focus:outline-none cursor-pointer"
           >
             <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -53,13 +53,13 @@ export default function MapControls({
           type="button"
           onClick={onToggle3D}
           title={is3dActive ? 'Switch to 2D Top-Down View' : 'Switch to 3D Isometric View'}
-          className={`p-2.5 sm:p-3 bg-slate-900/90 hover:bg-slate-800 border rounded-xl shadow-xl backdrop-blur-md transition-all active:scale-95 focus:outline-none cursor-pointer ${
+          className={`p-2.5 sm:p-3 bg-white/95 hover:bg-white border rounded-2xl shadow-lg backdrop-blur-md transition-all active:scale-95 focus:outline-none cursor-pointer ${
             is3dActive
-              ? 'text-cyan-400 border-cyan-500/60 shadow-cyan-950/50'
-              : 'text-slate-300 border-slate-700/80'
+              ? 'text-purple-600 border-purple-300 bg-purple-50/80 shadow-purple-100'
+              : 'text-slate-600 border-slate-200'
           }`}
         >
-          <Compass className={`w-4 h-4 sm:w-5 sm:h-5 ${is3dActive ? 'animate-pulse' : ''}`} />
+          <Compass className={`w-4 h-4 sm:w-5 sm:h-5 ${is3dActive ? 'animate-pulse text-purple-600' : ''}`} />
         </button>
       )}
 
@@ -68,7 +68,7 @@ export default function MapControls({
           type="button"
           onClick={onResetMap}
           title="Reset Map Orientation & View"
-          className="p-2.5 sm:p-3 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 rounded-xl shadow-xl backdrop-blur-md transition-all active:scale-95 focus:outline-none cursor-pointer"
+          className="p-2.5 sm:p-3 bg-white/95 hover:bg-white text-slate-700 hover:text-purple-600 border border-slate-200 rounded-2xl shadow-lg backdrop-blur-md transition-all active:scale-95 focus:outline-none cursor-pointer"
         >
           <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
@@ -79,10 +79,10 @@ export default function MapControls({
           type="button"
           onClick={onToggleLegend}
           title="Toggle Territory Legend"
-          className={`p-2.5 sm:p-3 bg-slate-900/90 hover:bg-slate-800 border rounded-xl shadow-xl backdrop-blur-md transition-all active:scale-95 focus:outline-none cursor-pointer ${
+          className={`p-2.5 sm:p-3 bg-white/95 hover:bg-white border rounded-2xl shadow-lg backdrop-blur-md transition-all active:scale-95 focus:outline-none cursor-pointer ${
             isLegendOpen
-              ? 'text-amber-400 border-amber-500/60'
-              : 'text-slate-300 border-slate-700/80'
+              ? 'text-purple-600 border-purple-300 bg-purple-50'
+              : 'text-slate-600 border-slate-200'
           }`}
         >
           <Layers className="w-4 h-4 sm:w-5 sm:h-5" />

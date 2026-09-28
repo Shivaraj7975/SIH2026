@@ -10,8 +10,15 @@ export function useRealtimeTerritory({ activeUser, onCellCaptured, onTerritoryLo
   const socketRef = useRef(null);
 
   useEffect(() => {
-    // Determine backend socket endpoint (defaults to port 5000 in dev or current origin)
-    const backendUrl = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
+    // Determine backend socket endpoint (supports VITE_WS_URL, VITE_API_URL host, or local dev)
+    const rawApiUrl = import.meta.env.VITE_API_URL || '';
+    const fallbackFromApi = rawApiUrl ? rawApiUrl.replace(/\/api\/?$/, '') : '';
+    const backendUrl =
+      import.meta.env.VITE_WS_URL ||
+      fallbackFromApi ||
+      (typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')
+        ? window.location.origin
+        : 'http://localhost:5000');
 
     // Connect to backend Socket.IO
     const socket = io(backendUrl, {

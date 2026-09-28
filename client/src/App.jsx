@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 
 const HomePage = lazy(() => import('./pages/HomePage.jsx'));
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
-const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const MapPage = lazy(() => import('./pages/MapPage.jsx'));
 const ActivityPage = lazy(() => import('./pages/ActivityPage.jsx'));
@@ -28,10 +27,12 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/map" replace />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/logs" element={<Navigate to="/activity" replace />} />
+        <Route path="/workouts" element={<Navigate to="/activity" replace />} />
         <Route path="/challenge" element={<ChallengePage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />

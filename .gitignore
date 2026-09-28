@@ -9,6 +9,8 @@ client/dist/
 
 # Local Environment variables
 .env
+.env.local
+.env.*.local
 client/.env
 server/.env
 !client/.env.example
@@ -17,6 +19,10 @@ server/.env
 # SQLite WAL and shared memory temporary files
 server/data/*.db-wal
 server/data/*.db-shm
+server/data/*.db-journal
+
+# Vercel and deployment temporary artifacts
+.vercel/
 
 # OS / Editor temporary files
 .DS_Store

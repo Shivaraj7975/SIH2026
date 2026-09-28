@@ -33,10 +33,21 @@ const PORT = process.env.PORT || 5000;
 // Initialize Realtime WebSocket Server
 const io = initSocketServer(server);
 
+// Helper to validate allowed CORS origins
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(origin)) return true;
+  if (origin.endsWith('.vercel.app')) return true;
+  if (process.env.CLIENT_URL) {
+    const configured = process.env.CLIENT_URL.split(',').map((u) => u.trim());
+    if (configured.includes(origin)) return true;
+  }
+  return true; // For testing/demo deployment, allow incoming origin
+};
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow all local origins during development (5173, 5174, etc.)
-    if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):[0-9]+$/.test(origin) || origin === process.env.CLIENT_URL) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       callback(null, true);
@@ -93,6 +104,20 @@ async function startServer() {
   try {
     initDatabase();
     await runMigrations();
+
+    // Auto-seed initial demo data if database is fresh
+    try {
+      const { query } = await import('./config/database.js');
+      const userRows = await query('SELECT count(*) as count FROM users');
+      const count = Number(userRows[0]?.count || 0);
+      if (count === 0) {
+        console.log('🌱 Fresh database detected. Auto-seeding initial users and challenges...');
+        const { runSeed } = await import('./db/seed.js');
+        await runSeed();
+      }
+    } catch (seedErr) {
+      console.warn('Notice during startup seed check:', seedErr.message);
+    }
 
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🚀 GeoFit Express & Socket.IO Server running on http://127.0.0.1:${PORT}`);

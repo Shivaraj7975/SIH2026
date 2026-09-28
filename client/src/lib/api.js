@@ -1,10 +1,18 @@
-const API_BASE = '/api';
+const rawApiUrl = import.meta.env.VITE_API_URL || '';
+const API_BASE = rawApiUrl
+  ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`)
+  : '/api';
 
 export async function apiRequest(endpoint, options = {}) {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const url = endpoint.startsWith('http')
+    ? endpoint
+    : `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('geofit_token') : null;
 
   const defaultHeaders = {
     'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   const config = {
@@ -13,7 +21,7 @@ export async function apiRequest(endpoint, options = {}) {
       ...defaultHeaders,
       ...options.headers,
     },
-    credentials: 'include', // Forward geofit_token cookie
+    credentials: 'include', // Forward geofit_token cookie if cross-domain allowed
   };
 
   if (config.body && typeof config.body === 'object') {

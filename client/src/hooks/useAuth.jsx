@@ -22,6 +22,9 @@ export function AuthProvider({ children }) {
       if (data.success && data.isAuthenticated && data.user) {
         setUser(data.user);
       } else {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('geofit_token');
+        }
         setUser(null);
       }
     } catch (err) {
@@ -41,6 +44,9 @@ export function AuthProvider({ children }) {
     if (!data.success) {
       throw new Error(data.error || 'Login failed');
     }
+    if (data.token && typeof window !== 'undefined') {
+      localStorage.setItem('geofit_token', data.token);
+    }
     setUser(data.user);
     return data.user;
   };
@@ -50,6 +56,9 @@ export function AuthProvider({ children }) {
     if (!data.success) {
       throw new Error(data.error || 'Registration failed');
     }
+    if (data.token && typeof window !== 'undefined') {
+      localStorage.setItem('geofit_token', data.token);
+    }
     setUser(data.user);
     return data.user;
   };
@@ -58,6 +67,9 @@ export function AuthProvider({ children }) {
     try {
       await api.post('/auth/logout');
     } catch (e) {}
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('geofit_token');
+    }
     setUser(null);
     navigate('/login');
   };

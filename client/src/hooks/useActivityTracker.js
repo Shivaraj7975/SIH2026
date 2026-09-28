@@ -226,6 +226,12 @@ export function useActivityTracker({
   const isSimulatedRef = useRef(false);
   const watchIdRef = useRef(null);
   const simIntervalRef = useRef(null);
+  const simDensePathRef = useRef([]);
+  const simStepIndexRef = useRef(0);
+  const simIntervalMsRef = useRef(250);
+  const simulatedTimeRef = useRef(Date.now());
+  const simCircuitCoordsRef = useRef([]);
+  const simSpeedMultiplierRef = useRef(2);
   const wakeLockRef = useRef(null);
   const activeTimerRef = useRef(null);
   const breakCountdownTimerRef = useRef(null);
@@ -400,7 +406,11 @@ export function useActivityTracker({
 
           if (err.code === 1) {
             code = LOCATION_ERRORS.PERMISSION_DENIED;
-            msg = 'Location permission was denied. Please allow location access in your browser settings.';
+            if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+              msg = 'Browser Security Rule: Mobile browsers strictly block GPS on non-HTTPS network IPs. Please open via https://' + window.location.host + ' or allow insecure origins in chrome://flags.';
+            } else {
+              msg = 'Location permission was denied. Please allow location access in your browser settings.';
+            }
             setPermissionState('denied');
           } else if (err.code === 2) {
             code = LOCATION_ERRORS.POSITION_UNAVAILABLE;
@@ -425,7 +435,9 @@ export function useActivityTracker({
 
   // Break Availability Evaluation (20-min active cooldown rule)
   const isBreakEligible =
-    breaksCount === 0
+    isSimulated
+      ? true
+      : breaksCount === 0
       ? activeSeconds >= FITNESS_CONFIG.BREAK.INITIAL_BREAK_AVAILABLE_AFTER
       : activeSecondsSinceLastBreak >= FITNESS_CONFIG.BREAK.ACTIVE_COOLDOWN_SECONDS;
 
@@ -441,8 +453,18 @@ export function useActivityTracker({
     (reason = 'USER_REQUESTED') => {
       if (state !== ACTIVITY_STATES.ACTIVE) return false;
 
+      const isSim = isSimulated || isSimulatedRef.current;
+
       // Enforce 20-minute active cooldown
-      if (!isBreakEligible && reason !== 'FORCE_STOP') {
+      // If simulated or force stop, always allow break immediately.
+      // If user explicitly clicks pause on first break, also allow it so button is never unresponsive.
+      const canBreak =
+        isSim ||
+        reason === 'FORCE_STOP' ||
+        isBreakEligible ||
+        (reason === 'USER_REQUESTED' && breaksCount === 0);
+
+      if (!canBreak) {
         const remainingMin = Math.ceil(breakCooldownRemainingSeconds / 60);
         setBreakWarningMessage(
           `Break unavailable. You must complete ${remainingMin} more minute${
@@ -451,6 +473,12 @@ export function useActivityTracker({
         );
         setTimeout(() => setBreakWarningMessage(null), 5000);
         return false;
+      }
+
+      // If simulated, pause simulation interval immediately so runner freezes in place
+      if (isSim && simIntervalRef.current) {
+        clearInterval(simIntervalRef.current);
+        simIntervalRef.current = null;
       }
 
       breakStartTimestampRef.current = Date.now();
@@ -467,7 +495,7 @@ export function useActivityTracker({
 
       return true;
     },
-    [state, isBreakEligible, breakCooldownRemainingSeconds]
+    [state, isSimulated, isBreakEligible, breakCooldownRemainingSeconds, breaksCount]
   );
   triggerBreakRef.current = triggerBreak;
 
@@ -523,6 +551,9 @@ export function useActivityTracker({
 
       // Handle BREAK State GPS behavior: filter stationary drift and detect auto-resumption
       if (state === ACTIVITY_STATES.BREAK) {
+        if (isSimulatedRef.current || raw.isSimulated) {
+          return;
+        }
         const lastMovementPt = lastActiveMovementPointRef.current || prev;
         if (lastMovementPt) {
           const distFromBreakPoint = calculateDistanceMeters(
@@ -675,39 +706,66 @@ export function useActivityTracker({
       setSummaryData(null);
       setState(ACTIVITY_STATES.ACTIVE);
 
-      let stepIndex = 0;
-      let simulatedTime = startTimestamp;
+      simDensePathRef.current = densePath;
+      simCircuitCoordsRef.current = circuitCoords;
+      simSpeedMultiplierRef.current = speedMultiplier;
+      simStepIndexRef.current = 0;
+      const intervalMs = Math.max(120, Math.round(1200 / speedMultiplier));
+      simIntervalMsRef.current = intervalMs;
+      simulatedTimeRef.current = startTimestamp;
+
       const initialLngLat = densePath[0];
       const initialPos = {
         latitude: initialLngLat[1],
         longitude: initialLngLat[0],
         accuracy: 6,
         speed: speedConfig.MIN_ACTIVE_SPEED_MS + 1.0,
-        timestamp: simulatedTime,
+        timestamp: startTimestamp,
         isSimulated: true,
       };
       if (handleRawPositionRef.current) {
         handleRawPositionRef.current(initialPos);
       }
 
-      const intervalMs = Math.max(400, Math.round(1400 / speedMultiplier));
-
       simIntervalRef.current = setInterval(() => {
-        stepIndex = (stepIndex + 1) % densePath.length;
-        const [lng, lat] = densePath[stepIndex];
-        simulatedTime += intervalMs;
+        simStepIndexRef.current += 1;
+        const idx = simStepIndexRef.current;
+
+        if (idx >= densePath.length) {
+          if (simIntervalRef.current) {
+            clearInterval(simIntervalRef.current);
+            simIntervalRef.current = null;
+          }
+          return;
+        }
+
+        const [lng, lat] = densePath[idx];
+        simulatedTimeRef.current += intervalMs;
 
         const nextPoint = {
           latitude: lat,
           longitude: lng,
           accuracy: 5,
           speed: speedConfig.MIN_ACTIVE_SPEED_MS + 1.2,
-          timestamp: simulatedTime,
+          timestamp: simulatedTimeRef.current,
           isSimulated: true,
         };
 
         if (handleRawPositionRef.current) {
           handleRawPositionRef.current(nextPoint);
+        }
+
+        // Auto-end the run once 1 complete lap is finished!
+        if (idx >= densePath.length - 1) {
+          if (simIntervalRef.current) {
+            clearInterval(simIntervalRef.current);
+            simIntervalRef.current = null;
+          }
+          setTimeout(() => {
+            if (stopTrackingRef.current) {
+              stopTrackingRef.current({ reason: 'LAP_COMPLETED' });
+            }
+          }, 350);
         }
       }, intervalMs);
     },
@@ -743,10 +801,61 @@ export function useActivityTracker({
       } catch (e) {}
 
       if (isSimulated || isSimulatedRef.current) {
-        if (circuitCoords && circuitCoords.length > 0 && startSimulatedTrackingRef.current) {
+        setState(ACTIVITY_STATES.ACTIVE);
+
+        if (simIntervalRef.current) {
+          clearInterval(simIntervalRef.current);
+          simIntervalRef.current = null;
+        }
+
+        const dense = simDensePathRef.current;
+        const intervalMs =
+          simIntervalMsRef.current || Math.max(120, Math.round(1200 / (speedMultiplier || simSpeedMultiplierRef.current || 2)));
+
+        if (dense && dense.length > 0 && simStepIndexRef.current < dense.length - 1) {
+          simIntervalRef.current = setInterval(() => {
+            simStepIndexRef.current += 1;
+            const idx = simStepIndexRef.current;
+
+            if (idx >= dense.length) {
+              if (simIntervalRef.current) {
+                clearInterval(simIntervalRef.current);
+                simIntervalRef.current = null;
+              }
+              return;
+            }
+
+            const [lng, lat] = dense[idx];
+            simulatedTimeRef.current = (simulatedTimeRef.current || Date.now()) + intervalMs;
+
+            const nextPoint = {
+              latitude: lat,
+              longitude: lng,
+              accuracy: 5,
+              speed: speedConfig.MIN_ACTIVE_SPEED_MS + 1.2,
+              timestamp: simulatedTimeRef.current,
+              isSimulated: true,
+            };
+
+            if (handleRawPositionRef.current) {
+              handleRawPositionRef.current(nextPoint);
+            }
+
+            // Auto-end the run once 1 complete lap is finished!
+            if (idx >= dense.length - 1) {
+              if (simIntervalRef.current) {
+                clearInterval(simIntervalRef.current);
+                simIntervalRef.current = null;
+              }
+              setTimeout(() => {
+                if (stopTrackingRef.current) {
+                  stopTrackingRef.current({ reason: 'LAP_COMPLETED' });
+                }
+              }, 350);
+            }
+          }, intervalMs);
+        } else if (circuitCoords && circuitCoords.length > 0 && startSimulatedTrackingRef.current) {
           startSimulatedTrackingRef.current(circuitCoords, speedMultiplier);
-        } else {
-          setState(ACTIVITY_STATES.ACTIVE);
         }
       } else {
         if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
@@ -761,7 +870,7 @@ export function useActivityTracker({
         setState(ACTIVITY_STATES.ACTIVE);
       }
     },
-    [state, isSimulated]
+    [state, isSimulated, speedConfig]
   );
   resumeTrackingRef.current = resumeTracking;
 
@@ -810,6 +919,7 @@ export function useActivityTracker({
       clientMetrics.durationSeconds = activeSeconds;
 
       try {
+        const isSim = Boolean(isSimulated || isSimulatedRef.current);
         const data = await api.post('/activity', {
           userId: activeUser?.id,
           type: activityType,
@@ -818,14 +928,21 @@ export function useActivityTracker({
           breaks: breakHistory,
           activeDuration: activeSeconds,
           totalBreakDuration: totalBreakSeconds,
+          isSimulated: isSim,
         });
+
+        const hexList = clientMetrics.uniqueCells && clientMetrics.uniqueCells.length > 0
+          ? clientMetrics.uniqueCells
+          : Array.from(capturedHexes);
 
         if (data.success) {
           GpsBuffer.clearBuffer();
           const finalResult = {
             ...data.data,
             metrics: clientMetrics,
-            terminationReason: isTimeout ? 'BREAK_TIMEOUT_EXCEEDED' : 'USER_STOPPED',
+            cellsCovered: hexList,
+            capturedHexes: hexList,
+            terminationReason: isTimeout ? 'BREAK_TIMEOUT_EXCEEDED' : options?.reason || 'USER_STOPPED',
           };
           setSummaryData(finalResult);
           setState(ACTIVITY_STATES.COMPLETED);
@@ -839,6 +956,8 @@ export function useActivityTracker({
           const fallbackSummary = {
             activityId: `act-${Date.now()}`,
             metrics: clientMetrics,
+            cellsCovered: hexList,
+            capturedHexes: hexList,
             activeDuration: activeSeconds,
             totalBreakDuration: totalBreakSeconds,
             breaksCount,
@@ -846,7 +965,7 @@ export function useActivityTracker({
             cellsCoveredCount: clientMetrics.uniqueCellsCount,
             totalAreaKm2: clientMetrics.areaCoveredKm2,
             totalAreaM2: clientMetrics.areaCoveredM2,
-            terminationReason: isTimeout ? 'BREAK_TIMEOUT_EXCEEDED' : 'USER_STOPPED',
+            terminationReason: isTimeout ? 'BREAK_TIMEOUT_EXCEEDED' : options?.reason || 'USER_STOPPED',
           };
           setSummaryData(fallbackSummary);
           setState(ACTIVITY_STATES.COMPLETED);
@@ -859,6 +978,8 @@ export function useActivityTracker({
         const fallbackSummary = {
           activityId: `act-${Date.now()}`,
           metrics: clientMetrics,
+          cellsCovered: hexList,
+          capturedHexes: hexList,
           activeDuration: activeSeconds,
           totalBreakDuration: totalBreakSeconds,
           breaksCount,
@@ -866,7 +987,7 @@ export function useActivityTracker({
           cellsCoveredCount: clientMetrics.uniqueCellsCount,
           totalAreaKm2: clientMetrics.areaCoveredKm2,
           totalAreaM2: clientMetrics.areaCoveredM2,
-          terminationReason: isTimeout ? 'BREAK_TIMEOUT_EXCEEDED' : 'USER_STOPPED',
+          terminationReason: isTimeout ? 'BREAK_TIMEOUT_EXCEEDED' : options?.reason || 'USER_STOPPED',
         };
         setSummaryData(fallbackSummary);
         setState(ACTIVITY_STATES.COMPLETED);
@@ -1001,6 +1122,8 @@ export function useActivityTracker({
       clearInterval(simIntervalRef.current);
       simIntervalRef.current = null;
     }
+    simDensePathRef.current = [];
+    simStepIndexRef.current = 0;
     setState(ACTIVITY_STATES.IDLE);
     setGpsPoints([]);
     setTrailCoordinates([]);

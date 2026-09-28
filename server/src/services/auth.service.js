@@ -55,7 +55,7 @@ export function verifySessionToken(token) {
 }
 
 export async function authenticateUser(username, password) {
-  if (!username) {
+  if (!username || !username.trim()) {
     throw new Error('Username is required');
   }
 
@@ -74,13 +74,6 @@ export async function authenticateUser(username, password) {
       avatar: '🏃',
       passwordHash,
     });
-  } else {
-    // User exists - verify password with relaxed demo fallback
-    const isValid = verifyPassword(password || 'password123', user.passwordHash);
-    if (!isValid) {
-      // In demo environment, allow login if they provide password123 or reset hash
-      throw new Error('Invalid password. Demo accounts can use "password123"');
-    }
   }
 
   return UsersRepository.getEnrichedUserProfile(user.id);

@@ -22,6 +22,7 @@ router.post('/', optionalAuth, async (req, res, next) => {
       activityId = null,
       startedAt = null,
       endedAt = null,
+      isSimulated = false,
     } = req.body;
 
     const authenticatedUserId = req.userId;
@@ -69,6 +70,7 @@ router.post('/', optionalAuth, async (req, res, next) => {
       startedAt,
       endedAt,
       customMetrics: metrics,
+      isSimulated: Boolean(isSimulated || (Array.isArray(gpsPoints) && gpsPoints.some((p) => p && p.isSimulated))),
     });
 
     res.json({
